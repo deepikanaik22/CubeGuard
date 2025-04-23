@@ -8,7 +8,7 @@
  */
 
 import {ai} from '@/ai/ai-instance';
-import {TelemetryData} from '@/services/telemetry';
+import {TelemetryData, getTelemetryData} from '@/services/telemetry';
 import {z} from 'genkit';
 
 const ExplainAnomalyScoreInputSchema = z.object({
@@ -32,7 +32,7 @@ const ExplainAnomalyScoreInputSchema = z.object({
       signalStrength: z.number(),
       packetDelay: z.number(),
     }),
-  }).describe('The telemetry data for the satellite.'),
+  }).describe('The telemetry data for the satellite.').optional(),
 });
 export type ExplainAnomalyScoreInput = z.infer<typeof ExplainAnomalyScoreInputSchema>;
 
@@ -50,10 +50,35 @@ export type ExplainAnomalyScoreOutput = z.infer<typeof ExplainAnomalyScoreOutput
 export const explainAnomalyScore = async (input: ExplainAnomalyScoreInput): Promise<ExplainAnomalyScoreOutput> =>
   explainAnomalyScoreFlow(input);
 
-const prompt = ai.definePrompt<ExplainAnomalyScoreInput, ExplainAnomalyScoreOutput>({
+const prompt = ai.definePrompt<
+  { telemetryData: TelemetryData, satelliteId: string },
+  ExplainAnomalyScoreOutput
+>({
   name: 'explainAnomalyScorePrompt',
   input: {
-    schema: ExplainAnomalyScoreInputSchema,
+    schema: z.object({
+      satelliteId: z.string().describe('The ID of the satellite to explain the anomaly score for.'),
+      telemetryData: z.object({
+        gyroscope: z.object({
+          x: z.number(),
+          y: z.number(),
+          z: z.number(),
+        }),
+        batteryVoltage: z.number(),
+        solarPanelOutput: z.number(),
+        internalTemperature: z.number(),
+        externalTemperature: z.number(),
+        magnetometer: z.object({
+          x: z.number(),
+          y: z.number(),
+          z: z.number(),
+        }),
+        communicationLogs: z.object({
+          signalStrength: z.number(),
+          packetDelay: z.number(),
+        }),
+      }).describe('The telemetry data for the satellite.'),
+    }),
   },
   output: {
     schema: z.object({
@@ -83,9 +108,9 @@ Based on your analysis, provide a clear and concise explanation of how the Anoma
 
 Finally, provide a breakdown of the risk score by failure type (thermal, comm, power, orientation), indicating the percentage contribution of each factor to the overall risk score.
 
-Satellite ID: {{input.satelliteId}}
+Satellite ID: {{satelliteId}}
 Here is the telemetry data:
-{{#with input.telemetryData}}
+{{#with telemetryData}}
 Gyroscope: x={{gyroscope.x}}, y={{gyroscope.y}}, z={{gyroscope.z}}
 Battery Voltage: {{batteryVoltage}}
 Solar Panel Output: {{solarPanelOutput}}
@@ -94,13 +119,18 @@ External Temperature: {{externalTemperature}}
 Magnetometer: x={{magnetometer.x}}, y={{magnetometer.y}}, z={{magnetometer.z}}Communication Logs: Signal Strength={{communicationLogs.signalStrength}}, Packet Delay={{communicationLogs.packetDelay}}{{/with}}`,
 });
 
-const explainAnomalyScoreFlow = ai.defineFlow({
+const explainAnomalyScoreFlow = ai.defineFlow<
+  ExplainAnomalyScoreInput,
+  ExplainAnomalyScoreOutput
+>({
   name: 'explainAnomalyScoreFlow',
   inputSchema: ExplainAnomalyScoreInputSchema,
   outputSchema: ExplainAnomalyScoreOutputSchema,
 }, async (input) => {
+  const telemetryData = await getTelemetryData(input.satelliteId);
   const result = await prompt({
-    input,
+    telemetryData: telemetryData,
+    satelliteId: input.satelliteId,
   });
 
   return result.output;

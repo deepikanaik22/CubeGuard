@@ -113,6 +113,62 @@ function AlertList() {
   );
 }
 
+interface AnomalyExplanationProps {
+  telemetry: any;
+  satelliteId: string;
+}
+
+const AnomalyExplanation: React.FC<AnomalyExplanationProps> = ({ telemetry, satelliteId }) => {
+  const [anomalyExplanation, setAnomalyExplanation] = useState<ExplainAnomalyScoreOutput | null>(null);
+  const [isLoadingAnomaly, setIsLoadingAnomaly] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAnomalyExplanation = async () => {
+    try {
+      setError(null);
+      setIsLoadingAnomaly(true);
+
+      if (!telemetry) {
+        setError("Telemetry data is not available.");
+        return;
+      }
+
+      const explanation = await explainAnomalyScore({
+        satelliteId: satelliteId,
+        telemetryData: telemetry,
+      });
+      setAnomalyExplanation(explanation);
+    } catch (error: any) {
+      setError("An error occurred while fetching anomaly explanation.");
+      console.error("Error fetching anomaly explanation:", error);
+    } finally {
+      setIsLoadingAnomaly(false);
+    }
+  };
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button onClick={fetchAnomalyExplanation} disabled={isLoadingAnomaly}>
+          {isLoadingAnomaly ? "Loading..." : "Get Anomaly Explanation"}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Anomaly Explanation</DialogTitle>
+          {isLoadingAnomaly ? (
+            <DialogDescription>Loading explanation...</DialogDescription>
+          ) : error ? (
+            <DialogDescription>{error}</DialogDescription>
+          ) : (
+            <DialogDescription>{anomalyExplanation?.explanation || "No explanation available."}</DialogDescription>
+          )}
+        </DialogHeader>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 
 export default function Home() {
   const router = useRouter();
@@ -124,8 +180,6 @@ export default function Home() {
   const [communicationStatus, setCommunicationStatus] = useState<"stable" | "unstable" | "lost">("stable");
   const [telemetry, setTelemetry] = useState<any>(null);
   const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
-  const [anomalyExplanation, setAnomalyExplanation] = useState<ExplainAnomalyScoreOutput | null>(null);
-  const [isLoadingAnomaly, setIsLoadingAnomaly] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
 
@@ -167,29 +221,6 @@ export default function Home() {
 
   const handleCommunicationStatusChange = (value: "stable" | "unstable" | "lost") => {
     setCommunicationStatus(value);
-  };
-
-  const fetchAnomalyExplanation = async () => {
-      try {
-          setError(null);
-          setIsLoadingAnomaly(true);
-
-          if (!telemetry) {
-              setError("Telemetry data is not available.");
-              return;
-          }
-
-          const explanation = await explainAnomalyScore({
-              satelliteId: satelliteId,
-              telemetryData: telemetry,
-          });
-          setAnomalyExplanation(explanation);
-      } catch (error: any) {
-          setError("An error occurred while fetching anomaly explanation.");
-          console.error("Error fetching anomaly explanation:", error);
-      } finally {
-          setIsLoadingAnomaly(false);
-      }
   };
 
   return (
@@ -234,25 +265,7 @@ export default function Home() {
           <h1 className="font-semibold text-2xl">
             Satellite Telemetry Dashboard
           </h1>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button onClick={fetchAnomalyExplanation} disabled={isLoadingAnomaly}>
-                {isLoadingAnomaly ? "Loading..." : "Get Anomaly Explanation"}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Anomaly Explanation</DialogTitle>
-                {isLoadingAnomaly ? (
-                  <DialogDescription>Loading explanation...</DialogDescription>
-                ) : error ? (
-                  <DialogDescription>{error}</DialogDescription>
-                ) : (
-                  <DialogDescription>{anomalyExplanation?.explanation || "No explanation available."}</DialogDescription>
-                )}
-              </DialogHeader>
-            </DialogContent>
-          </Dialog>
+          <AnomalyExplanation telemetry={telemetry} satelliteId={satelliteId} />
         </div>
 
         <Separator className="my-4" />
