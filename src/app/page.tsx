@@ -49,6 +49,9 @@ import {
 } from "@/components/ui/dialog";
 
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 const data = [
   { name: "00:00", uv: 400, pv: 2400, amt: 2400 },
@@ -60,16 +63,24 @@ const data = [
   { name: "01:30", uv: 349, pv: 4300, amt: 2100 },
 ];
 
-export default function Home() { 
+export default function Home() {
   const satelliteId = "cubesat-001";
   const [telemetry, setTelemetry] = useState<any>(null);
   const [anomalyExplanation, setAnomalyExplanation] = useState<any>(null);
   const [isLoadingAnomaly, setIsLoadingAnomaly] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // New states for telemetry input
+  const [batteryLevel, setBatteryLevel] = useState<number>(50);
+  const [temperature, setTemperature] = useState<number>(25);
+  const [communicationStatus, setCommunicationStatus] = useState<"stable" | "unstable" | "lost">("stable");
+  const [riskScore, setRiskScore] = useState<number | null>(null);
+  const [riskExplanation, setRiskExplanation] = useState<string | null>(null);
+  const [isCalculatingRisk, setIsCalculatingRisk] = useState(false);
+
   useEffect(() => {
     const fetchTelemetry = async () => {
-      const data = await getTelemetryData({satelliteId});
+      const data = await getTelemetryData({ satelliteId });
       setTelemetry(data);
     };
     fetchTelemetry();
@@ -89,6 +100,35 @@ export default function Home() {
     }
   };
 
+  const calculateRiskScore = async () => {
+    setIsCalculatingRisk(true);
+    try {
+      const response = await fetch('/api/getRiskScore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          batteryLevel,
+          temperature,
+          communicationStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setRiskScore(data.riskScore);
+      setRiskExplanation(data.explanation);
+    } catch (e: any) {
+      setError('Failed to calculate risk score.');
+      console.error("Could not calculate risk score", e);
+    } finally {
+      setIsCalculatingRisk(false);
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -152,83 +192,101 @@ export default function Home() {
         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardHeader>
-              <CardTitle>Battery Voltage</CardTitle>
+              <CardTitle>Battery Level</CardTitle>
             </CardHeader>
             <CardContent>
-              {telemetry ? (
-                <div className="flex items-center space-x-2">
-                  <Battery className="h-4 w-4" />
-                  <span>{telemetry?.batteryVoltage}V</span>
-                </div>
-              ) : (
-                <Skeleton className="h-8 w-24" />
-              )}
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="battery-level">Level (%):</Label>
+                <Input
+                  type="number"
+                  id="battery-level"
+                  value={batteryLevel}
+                  onChange={(e) => setBatteryLevel(Number(e.target.value))}
+                  className="w-20"
+                />
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Solar Panel Output</CardTitle>
+              <CardTitle>Temperature</CardTitle>
             </CardHeader>
             <CardContent>
-              {telemetry ? (
-                <div className="flex items-center space-x-2">
-                  <Waves className="h-4 w-4" />
-                  <span>{telemetry?.solarPanelOutput}W</span>
-                </div>
-              ) : (
-                <Skeleton className="h-8 w-24" />
-              )}
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="temperature">Temp (°C):</Label>
+                <Input
+                  type="number"
+                  id="temperature"
+                  value={temperature}
+                  onChange={(e) => setTemperature(Number(e.target.value))}
+                  className="w-20"
+                />
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Internal Temperature</CardTitle>
+              <CardTitle>Communication Status</CardTitle>
             </CardHeader>
             <CardContent>
-              {telemetry ? (
-                <div className="flex items-center space-x-2">
-                  <Thermometer className="h-4 w-4" />
-                  <span>{telemetry?.internalTemperature}°C</span>
-                </div>
-              ) : (
-                <Skeleton className="h-8 w-24" />
-              )}
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="communication-status">Status:</Label>
+                <Select onValueChange={(value) => setCommunicationStatus(value as "stable" | "unstable" | "lost")}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder={communicationStatus} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stable">Stable</SelectItem>
+                    <SelectItem value="unstable">Unstable</SelectItem>
+                    <SelectItem value="lost">Lost</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Anomaly Risk Score</CardTitle>
+              <CardTitle>Telemetry Data</CardTitle>
             </CardHeader>
             <CardContent>
-              {!isLoadingAnomaly && anomalyExplanation ? (
+              {telemetry ? (
                 <>
-                  <div className="text-2xl font-bold">
-                    {anomalyExplanation.breakdown.comm + anomalyExplanation.breakdown.orientation + anomalyExplanation.breakdown.power + anomalyExplanation.breakdown.thermal}
-                  %
+                  <div className="flex items-center space-x-2">
+                    <Battery className="h-4 w-4" />
+                    <span>Battery Voltage: {telemetry?.batteryVoltage}V</span>
                   </div>
-                  
-                  {error && (
-                    <p className="text-red-500">{error}</p>
-                  )}
-                  <Separator className="my-2" />
-                  <p className="text-sm">Breakdown:</p>
-                  <ul className="list-disc list-inside text-sm">
-                    <li>Thermal: {anomalyExplanation?.breakdown?.thermal}%</li>
-                    <li>Comm: {anomalyExplanation?.breakdown?.comm}%</li>
-                    <li>Power: {anomalyExplanation?.breakdown?.power}%</li>
-                    <li>
-                      Orientation: {anomalyExplanation?.breakdown?.orientation}%
-                    </li>
-                  </ul>
-                    <p className="text-sm text-muted-foreground">
-                      {anomalyExplanation?.explanation}
-                    </p>
+                  <div className="flex items-center space-x-2">
+                    <Waves className="h-4 w-4" />
+                    <span>Solar Panel Output: {telemetry?.solarPanelOutput}W</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Thermometer className="h-4 w-4" />
+                    <span>Internal Temperature: {telemetry?.internalTemperature}°C</span>
+                  </div>
                 </>
               ) : (
                 <Skeleton className="h-24 w-full" />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Risk Score</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={calculateRiskScore} disabled={isCalculatingRisk}>
+                {isCalculatingRisk ? "Calculating..." : "Calculate Risk"}
+              </Button>
+              {error && <p className="text-red-500 mt-2">{error}</p>}
+              {riskScore !== null && (
+                <div className="mt-4">
+                  <p className="text-2xl font-bold">{riskScore}%</p>
+                  <p className="text-sm text-muted-foreground">{riskExplanation}</p>
+                </div>
               )}
             </CardContent>
           </Card>
