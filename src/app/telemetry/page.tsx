@@ -1,16 +1,16 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {
   Battery,
   Thermometer,
   Waves,
 } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
-import { getTelemetryData } from "@/services/telemetry";
-import React, { useState, useEffect } from 'react';
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import {Skeleton} from "@/components/ui/skeleton";
+import {Separator} from "@/components/ui/separator";
+import {getTelemetryData} from "@/services/telemetry";
+import React, {useState, useEffect} from 'react';
+import {Sidebar, SidebarTrigger} from "@/components/ui/sidebar";
 
 export default function TelemetryPage() {
   const satelliteId = "cubesat-001";
@@ -18,7 +18,7 @@ export default function TelemetryPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const telemetryData = await getTelemetryData({ satelliteId });
+      const telemetryData = await getTelemetryData(satelliteId);
       setTelemetry(telemetryData);
     };
 
@@ -86,3 +86,4 @@ export default function TelemetryPage() {
     </div>
   );
 }
+

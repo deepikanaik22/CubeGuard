@@ -3,7 +3,7 @@
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
 import {ScrollArea} from '@/components/ui/scroll-area';
 import {Separator} from '@/components/ui/separator';
-import {SidebarTrigger} from '@/components/ui/sidebar';
+import {Sidebar, SidebarTrigger} from '@/components/ui/sidebar';
 import React from 'react';
 
 export default function AlertsPage() {
@@ -55,3 +55,4 @@ export default function AlertsPage() {
     </div>
   );
 }
+

@@ -2,7 +2,7 @@
 
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {Separator} from '@/components/ui/separator';
-import {SidebarTrigger} from '@/components/ui/sidebar';
+import {Sidebar, SidebarTrigger} from '@/components/ui/sidebar';
 
 export default function CommunicationPage() {
   const communicationData = {
@@ -54,3 +54,4 @@ export default function CommunicationPage() {
     </div>
   );
 }
+
