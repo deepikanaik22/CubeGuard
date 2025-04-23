@@ -373,4 +373,3 @@ function RiskScoreDisplay({ riskScoreData, calculateRiskScore }: RiskScoreDispla
     </>
   );
 }
-
