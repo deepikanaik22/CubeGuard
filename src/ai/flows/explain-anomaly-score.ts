@@ -34,10 +34,11 @@ export const explainAnomalyScore = async (input: ExplainAnomalyScoreInput): Prom
 const prompt = ai.definePrompt<{ telemetryData: TelemetryData; satelliteId: string }, ExplainAnomalyScoreOutput>({
   name: 'explainAnomalyScorePrompt',
   input: {
-    schema: z.object({}),
+    schema: z.object({
+      satelliteId: z.string().describe('The ID of the satellite to explain the anomaly score for.'),
+    }),
     contextSchema: z.object({
       telemetryData: z.any(),
-      satelliteId: z.string().describe('The ID of the satellite to explain the anomaly score for.'),
     }),
   },
   output: {
@@ -68,7 +69,7 @@ Based on your analysis, provide a clear and concise explanation of how the Anoma
 
 Finally, provide a breakdown of the risk score by failure type (thermal, comm, power, orientation), indicating the percentage contribution of each factor to the overall risk score.
 
-Satellite ID: {{satelliteId}}
+Satellite ID: {{input.satelliteId}}
 Here is the telemetry data:
 {{#with telemetryData}}
 Gyroscope: x={{gyroscope.x}}, y={{gyroscope.y}}, z={{gyroscope.z}}
@@ -117,11 +118,13 @@ const explainAnomalyScoreFlow = ai.defineFlow({
   inputSchema: ExplainAnomalyScoreInputSchema,
   outputSchema: ExplainAnomalyScoreOutputSchema,
   tools: [getTelemetryDataTool],
-}, async (input) => {
-  const telemetryData = await getTelemetryData(input.satelliteId);
+}, async (input, context) => {
+  const telemetryData = await context.tools.getTelemetryData({satelliteId: input.satelliteId});
   const result = await prompt({
-    telemetryData,
-    satelliteId: input.satelliteId,
+    input,
+    context: {
+      telemetryData
+    }
   });
 
   return result.output;

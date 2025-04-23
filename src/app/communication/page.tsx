@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import {Badge} from "@/components/ui/badge";
 import { useRouter } from 'next/navigation';
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarHeader, SidebarSeparator, SidebarContent, SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarFooter } from "@/components/ui/sidebar";
+import React from 'react';
 
 const communicationData = {
   signalStrength: '-75 dBm',

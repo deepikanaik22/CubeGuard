@@ -3,7 +3,15 @@
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
 import {ScrollArea} from '@/components/ui/scroll-area';
 import {Separator} from '@/components/ui/separator';
-import {Sidebar, SidebarTrigger} from '@/components/ui/sidebar';
+import {
+  Navigation,
+  AlertTriangle,
+  Cpu,
+  Mail,
+} from "lucide-react";
+import {Badge} from "@/components/ui/badge";
+import { useRouter } from 'next/navigation';
+import { SidebarProvider, Sidebar, SidebarHeader, SidebarSeparator, SidebarContent, SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarFooter } from "@/components/ui/sidebar";
 import React from 'react';
 
 const alerts = [
@@ -30,6 +38,8 @@ const alerts = [
 ];
 
 export default function AlertsPage() {
+  const router = useRouter();
+
   return (
     <SidebarProvider>
       <Sidebar className="w-60">

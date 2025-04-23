@@ -122,7 +122,7 @@ export default function Home() {
   const [communicationStatus, setCommunicationStatus] = useState<"stable" | "unstable" | "lost">("stable");
   const [telemetry, setTelemetry] = useState<any>(null); // Replace 'any' with the correct type
   const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
-  const [anomalyExplanation, setAnomalyExplanation] = useState<ExplainAnomalyScoreOutput | null>(null);
+  const [anomalyExplanation, setAnomalyExplanation] = useState<string | null>(null);
   const [isLoadingAnomaly, setIsLoadingAnomaly] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -172,8 +172,8 @@ export default function Home() {
       setError(null);
       setIsLoadingAnomaly(true);
       const explanation = await explainAnomalyScore({satelliteId});
-      setAnomalyExplanation(explanation);
-    } catch (error) {
+      setAnomalyExplanation(explanation?.explanation || null);
+    } catch (error: any) {
       setError("An error occurred while fetching anomaly explanation.");
       console.error("Error fetching anomaly explanation:", error);
     } finally {
@@ -237,7 +237,7 @@ export default function Home() {
                 ) : error ? (
                   <DialogDescription>{error}</DialogDescription>
                 ) : (
-                  <DialogDescription>{anomalyExplanation?.explanation}</DialogDescription>
+                  <DialogDescription>{anomalyExplanation || "No explanation available."}</DialogDescription>
                 )}
               </DialogHeader>
             </DialogContent>
