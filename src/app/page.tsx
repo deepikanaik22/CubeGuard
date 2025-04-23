@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   Sidebar,
@@ -22,7 +22,6 @@ import {
   AlertTriangle,
   Cpu,
 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { getTelemetryData } from "@/services/telemetry";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +51,8 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {getRiskScore, GetRiskScoreOutput} from "@/ai/flows/get-risk-score";
+import React, { useState, useEffect } from 'react';
 
 const data = [
   { name: "00:00", uv: 400, pv: 2400, amt: 2400 },
@@ -65,69 +66,46 @@ const data = [
 
 export default function Home() {
   const satelliteId = "cubesat-001";
-  const [telemetry, setTelemetry] = useState<any>(null);
-  const [anomalyExplanation, setAnomalyExplanation] = useState<any>(null);
-  const [isLoadingAnomaly, setIsLoadingAnomaly] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // New states for telemetry input
   const [batteryLevel, setBatteryLevel] = useState<number>(50);
   const [temperature, setTemperature] = useState<number>(25);
   const [communicationStatus, setCommunicationStatus] = useState<"stable" | "unstable" | "lost">("stable");
-  const [riskScore, setRiskScore] = useState<number | null>(null);
-  const [riskExplanation, setRiskExplanation] = useState<string | null>(null);
-  const [isCalculatingRisk, setIsCalculatingRisk] = useState(false);
+  const [telemetry, setTelemetry] = useState<any>(null); // Replace 'any' with the correct type
+  const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
 
   useEffect(() => {
-    const fetchTelemetry = async () => {
-      const data = await getTelemetryData({ satelliteId });
-      setTelemetry(data);
+    const fetchData = async () => {
+      const telemetryData = await getTelemetryData({ satelliteId });
+      setTelemetry(telemetryData);
     };
-    fetchTelemetry();
+
+    fetchData();
   }, [satelliteId]);
 
-  const fetchAnomalyExplanation = async () => {
+  const calculateRiskScore = async () => {
     try {
-      setError(null);
-      setIsLoadingAnomaly(true);
-      const explanation = await explainAnomalyScore({ satelliteId: "sat1" });
-      setAnomalyExplanation(explanation);
+      const riskData = await getRiskScore({
+        batteryLevel: Number(batteryLevel),
+        temperature: Number(temperature),
+        communicationStatus: communicationStatus,
+      });
+      setRiskScoreData(riskData);
     } catch (error) {
-      setError("An error occurred while fetching anomaly explanation.");
-      console.error("Error fetching anomaly explanation:", error);
-    } finally {
-      setIsLoadingAnomaly(false);
+      console.error("Error calculating risk score:", error);
+      // Handle error appropriately
     }
   };
 
-  const calculateRiskScore = async () => {
-    setIsCalculatingRisk(true);
-    try {
-      const response = await fetch('/api/getRiskScore', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          batteryLevel,
-          temperature,
-          communicationStatus,
-        }),
-      });
+  const handleBatteryLevelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setBatteryLevel(Number(e.target.value));
+  };
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+  const handleTemperatureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTemperature(Number(e.target.value));
+  };
 
-      const data = await response.json();
-      setRiskScore(data.riskScore);
-      setRiskExplanation(data.explanation);
-    } catch (e: any) {
-      setError('Failed to calculate risk score.');
-      console.error("Could not calculate risk score", e);
-    } finally {
-      setIsCalculatingRisk(false);
-    }
+  const handleCommunicationStatusChange = (value: "stable" | "unstable" | "lost") => {
+    setCommunicationStatus(value);
   };
 
   return (
@@ -172,19 +150,7 @@ export default function Home() {
           <h1 className="font-semibold text-2xl">
             Satellite Telemetry Dashboard
           </h1>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button onClick={fetchAnomalyExplanation}>
-                Get anomaly score
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Anomaly Explanation</DialogTitle>
-                <DialogDescription>{anomalyExplanation?.explanation}</DialogDescription>
-              </DialogHeader>
-            </DialogContent>
-          </Dialog>
+          <AnomalyExplanationDialog satelliteId={satelliteId} />
         </div>
 
         <Separator className="my-4" />
@@ -201,7 +167,7 @@ export default function Home() {
                   type="number"
                   id="battery-level"
                   value={batteryLevel}
-                  onChange={(e) => setBatteryLevel(Number(e.target.value))}
+                  onChange={handleBatteryLevelChange}
                   className="w-20"
                 />
               </div>
@@ -219,7 +185,7 @@ export default function Home() {
                   type="number"
                   id="temperature"
                   value={temperature}
-                  onChange={(e) => setTemperature(Number(e.target.value))}
+                  onChange={handleTemperatureChange}
                   className="w-20"
                 />
               </div>
@@ -233,7 +199,7 @@ export default function Home() {
             <CardContent>
               <div className="flex items-center space-x-2">
                 <Label htmlFor="communication-status">Status:</Label>
-                <Select onValueChange={(value) => setCommunicationStatus(value as "stable" | "unstable" | "lost")}>
+                <Select value={communicationStatus} onValueChange={handleCommunicationStatusChange}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder={communicationStatus} />
                   </SelectTrigger>
@@ -278,16 +244,7 @@ export default function Home() {
               <CardTitle>Risk Score</CardTitle>
             </CardHeader>
             <CardContent>
-              <Button onClick={calculateRiskScore} disabled={isCalculatingRisk}>
-                {isCalculatingRisk ? "Calculating..." : "Calculate Risk"}
-              </Button>
-              {error && <p className="text-red-500 mt-2">{error}</p>}
-              {riskScore !== null && (
-                <div className="mt-4">
-                  <p className="text-2xl font-bold">{riskScore}%</p>
-                  <p className="text-sm text-muted-foreground">{riskExplanation}</p>
-                </div>
-              )}
+              <RiskScoreDisplay riskScoreData={riskScoreData} calculateRiskScore={calculateRiskScore} />
             </CardContent>
           </Card>
 
@@ -351,5 +308,68 @@ export default function Home() {
         </div>
       </div>
     </SidebarProvider>
+  );
+}
+
+interface AnomalyExplanationDialogProps {
+  satelliteId: string;
+}
+
+function AnomalyExplanationDialog({ satelliteId }: AnomalyExplanationDialogProps) {
+  const [anomalyExplanation, setAnomalyExplanation] = React.useState<any>(null);
+  const [isLoadingAnomaly, setIsLoadingAnomaly] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const fetchAnomalyExplanation = async () => {
+    try {
+      setError(null);
+      setIsLoadingAnomaly(true);
+      const explanation = await explainAnomalyScore({ satelliteId });
+      setAnomalyExplanation(explanation);
+    } catch (error) {
+      setError("An error occurred while fetching anomaly explanation.");
+      console.error("Error fetching anomaly explanation:", error);
+    } finally {
+      setIsLoadingAnomaly(false);
+    }
+  };
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button onClick={fetchAnomalyExplanation} disabled={isLoadingAnomaly}>
+          {isLoadingAnomaly ? "Loading..." : "Get Anomaly Explanation"}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Anomaly Explanation</DialogTitle>
+          {isLoadingAnomaly ? (
+            <DialogDescription>Loading explanation...</DialogDescription>
+          ) : error ? (
+            <DialogDescription>{error}</DialogDescription>
+          ) : (
+            <DialogDescription>{anomalyExplanation?.explanation}</DialogDescription>
+          )}
+        </DialogHeader>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface RiskScoreDisplayProps {
+  riskScoreData: GetRiskScoreOutput | null;
+  calculateRiskScore: () => Promise<void>;
+}
+
+function RiskScoreDisplay({ riskScoreData, calculateRiskScore }: RiskScoreDisplayProps) {
+  return (
+    <>
+      <p className="text-2xl font-bold">{riskScoreData ? `${riskScoreData?.riskScore}%` : 'N/A'}</p>
+      <p className="text-sm text-muted-foreground">
+        {riskScoreData ? riskScoreData?.explanation : 'No risk score calculated.'}
+      </p>
+      <Button onClick={calculateRiskScore}>Calculate Risk</Button>
+    </>
   );
 }
