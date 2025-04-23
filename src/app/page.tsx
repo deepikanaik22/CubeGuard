@@ -54,6 +54,7 @@ import {Input} from "@/components/ui/input";
 import {getRiskScore, GetRiskScoreOutput} from "@/ai/flows/get-risk-score";
 import React, {useState, useEffect} from 'react';
 import {useRouter} from 'next/navigation';
+import { useSidebar } from "@/components/ui/sidebar";
 
 const data = [
   {name: "00:00", uv: 400, pv: 2400, amt: 2400},
@@ -116,13 +117,14 @@ function AlertList() {
 export default function Home() {
   const router = useRouter();
   const satelliteId = "cubesat-001";
+  const { setOpenMobile } = useSidebar();
 
   const [batteryLevel, setBatteryLevel] = useState<number>(50);
   const [temperature, setTemperature] = useState<number>(25);
   const [communicationStatus, setCommunicationStatus] = useState<"stable" | "unstable" | "lost">("stable");
-  const [telemetry, setTelemetry] = useState<any>(null); // Replace 'any' with the correct type
+  const [telemetry, setTelemetry] = useState<any>(null);
   const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
-  const [anomalyExplanation, setAnomalyExplanation] = useState<string | null>(null);
+  const [anomalyExplanation, setAnomalyExplanation] = useState<ExplainAnomalyScoreOutput | null>(null);
   const [isLoadingAnomaly, setIsLoadingAnomaly] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -168,17 +170,26 @@ export default function Home() {
   };
 
   const fetchAnomalyExplanation = async () => {
-    try {
-      setError(null);
-      setIsLoadingAnomaly(true);
-      const explanation = await explainAnomalyScore({satelliteId});
-      setAnomalyExplanation(explanation?.explanation || null);
-    } catch (error: any) {
-      setError("An error occurred while fetching anomaly explanation.");
-      console.error("Error fetching anomaly explanation:", error);
-    } finally {
-      setIsLoadingAnomaly(false);
-    }
+      try {
+          setError(null);
+          setIsLoadingAnomaly(true);
+
+          if (!telemetry) {
+              setError("Telemetry data is not available.");
+              return;
+          }
+
+          const explanation = await explainAnomalyScore({
+              satelliteId: satelliteId,
+              telemetryData: telemetry,
+          });
+          setAnomalyExplanation(explanation);
+      } catch (error: any) {
+          setError("An error occurred while fetching anomaly explanation.");
+          console.error("Error fetching anomaly explanation:", error);
+      } finally {
+          setIsLoadingAnomaly(false);
+      }
   };
 
   return (
@@ -191,20 +202,20 @@ export default function Home() {
         <SidebarContent>
           <SidebarGroup>
             <SidebarMenu>
-              <SidebarMenuButton onClick={() => router.push('/')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/') }}>
                 <Navigation className="mr-2 h-4 w-4" />
                 <span>Overview</span>
               </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => router.push('/telemetry')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/telemetry') }}>
                 <Cpu className="mr-2 h-4 w-4" />
                 <span>Telemetry</span>
               </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => router.push('/alerts')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/alerts') }}>
                 <AlertTriangle className="mr-2 h-4 w-4" />
                 <span>Alerts</span>
                 <Badge className="ml-auto">3</Badge>
               </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => router.push('/communication')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/communication') }}>
                 <Mail className="mr-2 h-4 w-4" />
                 <span>Communication</span>
               </SidebarMenuButton>
@@ -237,7 +248,7 @@ export default function Home() {
                 ) : error ? (
                   <DialogDescription>{error}</DialogDescription>
                 ) : (
-                  <DialogDescription>{anomalyExplanation || "No explanation available."}</DialogDescription>
+                  <DialogDescription>{anomalyExplanation?.explanation || "No explanation available."}</DialogDescription>
                 )}
               </DialogHeader>
             </DialogContent>

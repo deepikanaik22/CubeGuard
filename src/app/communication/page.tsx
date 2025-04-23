@@ -13,6 +13,7 @@ import {Badge} from "@/components/ui/badge";
 import { useRouter } from 'next/navigation';
 import { SidebarProvider, SidebarHeader, SidebarSeparator, SidebarContent, SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarFooter } from "@/components/ui/sidebar";
 import React from 'react';
+import { useSidebar } from "@/components/ui/sidebar";
 
 const communicationData = {
   signalStrength: '-75 dBm',
@@ -22,6 +23,7 @@ const communicationData = {
 
 export default function CommunicationPage() {
   const router = useRouter();
+  const { setOpenMobile } = useSidebar();
 
   return (
     <SidebarProvider>
@@ -33,20 +35,20 @@ export default function CommunicationPage() {
         <SidebarContent>
           <SidebarGroup>
             <SidebarMenu>
-              <SidebarMenuButton onClick={() => router.push('/')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/') }}>
                 <Navigation className="mr-2 h-4 w-4" />
                 <span>Overview</span>
               </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => router.push('/telemetry')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/telemetry') }}>
                 <Cpu className="mr-2 h-4 w-4" />
                 <span>Telemetry</span>
               </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => router.push('/alerts')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/alerts') }}>
                 <AlertTriangle className="mr-2 h-4 w-4" />
                 <span>Alerts</span>
                 <Badge className="ml-auto">3</Badge>
               </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => router.push('/communication')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/communication') }}>
                 <Mail className="mr-2 h-4 w-4" />
                 <span>Communication</span>
               </SidebarMenuButton>

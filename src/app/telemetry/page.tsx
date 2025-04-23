@@ -17,12 +17,14 @@ import React, {useState, useEffect} from 'react';
 import {Sidebar, SidebarTrigger} from "@/components/ui/sidebar";
 import { useRouter } from 'next/navigation';
 import {Badge} from "@/components/ui/badge";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarSeparator } from "@/components/ui/sidebar";
+import { useSidebar } from "@/components/ui/sidebar";
 
 export default function TelemetryPage() {
   const router = useRouter();
   const satelliteId = "cubesat-001";
   const [telemetry, setTelemetry] = useState<any>(null);
+  const { setOpenMobile } = useSidebar();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -43,20 +45,20 @@ export default function TelemetryPage() {
         <SidebarContent>
           <SidebarGroup>
             <SidebarMenu>
-              <SidebarMenuButton onClick={() => router.push('/')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/') }}>
                 <Navigation className="mr-2 h-4 w-4" />
                 <span>Overview</span>
               </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => router.push('/telemetry')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/telemetry') }}>
                 <Cpu className="mr-2 h-4 w-4" />
                 <span>Telemetry</span>
               </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => router.push('/alerts')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/alerts') }}>
                 <AlertTriangle className="mr-2 h-4 w-4" />
                 <span>Alerts</span>
                 <Badge className="ml-auto">3</Badge>
               </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => router.push('/communication')}>
+              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/communication') }}>
                 <Mail className="mr-2 h-4 w-4" />
                 <span>Communication</span>
               </SidebarMenuButton>
