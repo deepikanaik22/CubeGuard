@@ -113,7 +113,7 @@ const explainAnomalyScoreFlow = ai.defineFlow({
   name: 'explainAnomalyScoreFlow',
   inputSchema: ExplainAnomalyScoreInputSchema,
   outputSchema: ExplainAnomalyScoreOutputSchema,
-  tools: {getTelemetryData: getTelemetryDataTool},
+  tools: [getTelemetryDataTool],
 }, async (input, context) => {
   const telemetryData = await context.tools.getTelemetryData({satelliteId: input.satelliteId});
   const result = await prompt({

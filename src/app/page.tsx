@@ -53,6 +53,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {getRiskScore, GetRiskScoreOutput} from "@/ai/flows/get-risk-score";
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 const data = [
   { name: "00:00", uv: 400, pv: 2400, amt: 2400 },
@@ -65,6 +66,7 @@ const data = [
 ];
 
 export default function Home() {
+  const router = useRouter();
   const satelliteId = "cubesat-001";
 
   const [batteryLevel, setBatteryLevel] = useState<number>(50);
@@ -72,6 +74,10 @@ export default function Home() {
   const [communicationStatus, setCommunicationStatus] = useState<"stable" | "unstable" | "lost">("stable");
   const [telemetry, setTelemetry] = useState<any>(null); // Replace 'any' with the correct type
   const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
+  const [anomalyExplanation, setAnomalyExplanation] = useState<ExplainAnomalyScoreOutput | null>(null);
+  const [isLoadingAnomaly, setIsLoadingAnomaly] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -108,6 +114,20 @@ export default function Home() {
     setCommunicationStatus(value);
   };
 
+  const fetchAnomalyExplanation = async () => {
+    try {
+      setError(null);
+      setIsLoadingAnomaly(true);
+      const explanation = await explainAnomalyScore({ satelliteId });
+      setAnomalyExplanation(explanation);
+    } catch (error) {
+      setError("An error occurred while fetching anomaly explanation.");
+      console.error("Error fetching anomaly explanation:", error);
+    } finally {
+      setIsLoadingAnomaly(false);
+    }
+  };
+
   return (
     <SidebarProvider>
       <Sidebar className="w-60">
@@ -118,20 +138,20 @@ export default function Home() {
         <SidebarContent>
           <SidebarGroup>
             <SidebarMenu>
-              <SidebarMenuButton>
+              <SidebarMenuButton onClick={() => router.push('/')}>
                 <Navigation className="mr-2 h-4 w-4" />
                 <span>Overview</span>
               </SidebarMenuButton>
-              <SidebarMenuButton>
+              <SidebarMenuButton onClick={() => router.push('/telemetry')}>
                 <Cpu className="mr-2 h-4 w-4" />
                 <span>Telemetry</span>
               </SidebarMenuButton>
-              <SidebarMenuButton>
+              <SidebarMenuButton onClick={() => router.push('/alerts')}>
                 <AlertTriangle className="mr-2 h-4 w-4" />
                 <span>Alerts</span>
                 <Badge className="ml-auto">3</Badge>
               </SidebarMenuButton>
-              <SidebarMenuButton>
+              <SidebarMenuButton onClick={() => router.push('/communication')}>
                 <Mail className="mr-2 h-4 w-4" />
                 <span>Communication</span>
               </SidebarMenuButton>
@@ -150,7 +170,25 @@ export default function Home() {
           <h1 className="font-semibold text-2xl">
             Satellite Telemetry Dashboard
           </h1>
-          <AnomalyExplanationDialog satelliteId={satelliteId} />
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button onClick={fetchAnomalyExplanation} disabled={isLoadingAnomaly}>
+                {isLoadingAnomaly ? "Loading..." : "Get Anomaly Explanation"}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Anomaly Explanation</DialogTitle>
+                {isLoadingAnomaly ? (
+                  <DialogDescription>Loading explanation...</DialogDescription>
+                ) : error ? (
+                  <DialogDescription>{error}</DialogDescription>
+                ) : (
+                  <DialogDescription>{anomalyExplanation?.explanation}</DialogDescription>
+                )}
+              </DialogHeader>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <Separator className="my-4" />
@@ -244,7 +282,13 @@ export default function Home() {
               <CardTitle>Risk Score</CardTitle>
             </CardHeader>
             <CardContent>
-              <RiskScoreDisplay riskScoreData={riskScoreData} calculateRiskScore={calculateRiskScore} />
+            <p className="text-2xl font-bold">
+              {riskScoreData ? `${riskScoreData.riskScore}%` : 'N/A'}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {riskScoreData ? riskScoreData.explanation : 'No risk score calculated.'}
+            </p>
+            <Button onClick={calculateRiskScore}>Calculate Risk</Button>
             </CardContent>
           </Card>
 
@@ -308,68 +352,5 @@ export default function Home() {
         </div>
       </div>
     </SidebarProvider>
-  );
-}
-
-interface AnomalyExplanationDialogProps {
-  satelliteId: string;
-}
-
-function AnomalyExplanationDialog({ satelliteId }: AnomalyExplanationDialogProps) {
-  const [anomalyExplanation, setAnomalyExplanation] = React.useState<ExplainAnomalyScoreOutput | null>(null);
-  const [isLoadingAnomaly, setIsLoadingAnomaly] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const fetchAnomalyExplanation = async () => {
-    try {
-      setError(null);
-      setIsLoadingAnomaly(true);
-      const explanation = await explainAnomalyScore({ satelliteId });
-      setAnomalyExplanation(explanation);
-    } catch (error) {
-      setError("An error occurred while fetching anomaly explanation.");
-      console.error("Error fetching anomaly explanation:", error);
-    } finally {
-      setIsLoadingAnomaly(false);
-    }
-  };
-
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button onClick={fetchAnomalyExplanation} disabled={isLoadingAnomaly}>
-          {isLoadingAnomaly ? "Loading..." : "Get Anomaly Explanation"}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Anomaly Explanation</DialogTitle>
-          {isLoadingAnomaly ? (
-            <DialogDescription>Loading explanation...</DialogDescription>
-          ) : error ? (
-            <DialogDescription>{error}</DialogDescription>
-          ) : (
-            <DialogDescription>{anomalyExplanation?.explanation}</DialogDescription>
-          )}
-        </DialogHeader>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-interface RiskScoreDisplayProps {
-  riskScoreData: GetRiskScoreOutput | null;
-  calculateRiskScore: () => Promise<void>;
-}
-
-function RiskScoreDisplay({ riskScoreData, calculateRiskScore }: RiskScoreDisplayProps) {
-  return (
-    <>
-      <p className="text-2xl font-bold">{riskScoreData ? `${riskScoreData?.riskScore}%` : 'N/A'}</p>
-      <p className="text-sm text-muted-foreground">
-        {riskScoreData ? riskScoreData?.explanation : 'No risk score calculated.'}
-      </p>
-      <Button onClick={calculateRiskScore}>Calculate Risk</Button>
-    </>
   );
 }
