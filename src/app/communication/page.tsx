@@ -1,10 +1,16 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
+import {Separator} from '@/components/ui/separator';
+import {SidebarTrigger} from '@/components/ui/sidebar';
 
 export default function CommunicationPage() {
+  const communicationData = {
+    signalStrength: '-75 dBm',
+    packetDelay: '120 ms',
+    lastContact: '2 minutes ago',
+  };
+
   return (
     <div>
       <div className="flex items-center space-x-4">
@@ -20,10 +26,8 @@ export default function CommunicationPage() {
             <CardTitle>Signal Strength</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">-75 dBm</p>
-            <p className="text-sm text-muted-foreground">
-              Acceptable signal strength.
-            </p>
+            <p className="text-2xl font-bold">{communicationData.signalStrength}</p>
+            <p className="text-sm text-muted-foreground">Acceptable signal strength.</p>
           </CardContent>
         </Card>
 
@@ -32,10 +36,8 @@ export default function CommunicationPage() {
             <CardTitle>Packet Delay</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">120 ms</p>
-            <p className="text-sm text-muted-foreground">
-              Slightly elevated packet delay.
-            </p>
+            <p className="text-2xl font-bold">{communicationData.packetDelay}</p>
+            <p className="text-sm text-muted-foreground">Slightly elevated packet delay.</p>
           </CardContent>
         </Card>
 
@@ -44,10 +46,8 @@ export default function CommunicationPage() {
             <CardTitle>Last Contact</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">2 minutes ago</p>
-            <p className="text-sm text-muted-foreground">
-              Regular communication intervals.
-            </p>
+            <p className="text-2xl font-bold">{communicationData.lastContact}</p>
+            <p className="text-sm text-muted-foreground">Regular communication intervals.</p>
           </CardContent>
         </Card>
       </div>

@@ -12,7 +12,7 @@ import {
   SidebarTrigger,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {
   Battery,
   Thermometer,
@@ -22,9 +22,9 @@ import {
   AlertTriangle,
   Cpu,
 } from "lucide-react";
-import { getTelemetryData } from "@/services/telemetry";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import {getTelemetryData} from "@/services/telemetry";
+import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
+import {Badge} from "@/components/ui/badge";
 import {
   AreaChart,
   Area,
@@ -34,10 +34,10 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { explainAnomalyScore, ExplainAnomalyScoreOutput } from "@/ai/flows/explain-anomaly-score";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import {ScrollArea} from "@/components/ui/scroll-area";
+import {explainAnomalyScore, ExplainAnomalyScoreOutput} from "@/ai/flows/explain-anomaly-score";
+import {Skeleton} from "@/components/ui/skeleton";
+import {Button} from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -47,23 +47,42 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import {Separator} from "@/components/ui/separator";
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
+import {Label} from "@/components/ui/label";
+import {Input} from "@/components/ui/input";
 import {getRiskScore, GetRiskScoreOutput} from "@/ai/flows/get-risk-score";
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, {useState, useEffect} from 'react';
+import {useRouter} from 'next/navigation';
 
 const data = [
-  { name: "00:00", uv: 400, pv: 2400, amt: 2400 },
-  { name: "00:15", uv: 300, pv: 1398, amt: 2210 },
-  { name: "00:30", uv: 200, pv: 9800, amt: 2290 },
-  { name: "00:45", uv: 278, pv: 3908, amt: 2000 },
-  { name: "01:00", uv: 189, pv: 4800, amt: 2181 },
-  { name: "01:15", uv: 239, pv: 3800, amt: 2500 },
-  { name: "01:30", uv: 349, pv: 4300, amt: 2100 },
+  {name: "00:00", uv: 400, pv: 2400, amt: 2400},
+  {name: "00:15", uv: 300, pv: 1398, amt: 2210},
+  {name: "00:30", uv: 200, pv: 9800, amt: 2290},
+  {name: "00:45", uv: 278, pv: 3908, amt: 2000},
+  {name: "01:00", uv: 189, pv: 4800, amt: 2181},
+  {name: "01:15", uv: 239, pv: 3800, amt: 2500},
+  {name: "01:30", uv: 349, pv: 4300, amt: 2100},
 ];
+
+interface RiskScoreDisplayProps {
+  riskScoreData: GetRiskScoreOutput | null;
+  calculateRiskScore: () => void;
+}
+
+const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = ({riskScoreData, calculateRiskScore}) => {
+  return (
+    <>
+      <p className="text-2xl font-bold">
+        {riskScoreData ? `${riskScoreData.riskScore}%` : 'N/A'}
+      </p>
+      <p className="text-sm text-muted-foreground">
+        {riskScoreData ? riskScoreData.explanation : 'No risk score calculated.'}
+      </p>
+      <Button onClick={calculateRiskScore}>Calculate Risk</Button>
+    </>
+  );
+};
 
 export default function Home() {
   const router = useRouter();
@@ -81,8 +100,13 @@ export default function Home() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const telemetryData = await getTelemetryData({ satelliteId });
-      setTelemetry(telemetryData);
+      try {
+        const telemetryData = await getTelemetryData(satelliteId);
+        setTelemetry(telemetryData);
+      } catch (err) {
+        console.error("Failed to fetch telemetry data", err);
+        setError("Failed to fetch telemetry data.");
+      }
     };
 
     fetchData();
@@ -98,7 +122,7 @@ export default function Home() {
       setRiskScoreData(riskData);
     } catch (error) {
       console.error("Error calculating risk score:", error);
-      // Handle error appropriately
+      setError("Failed to calculate risk score");
     }
   };
 
@@ -118,7 +142,7 @@ export default function Home() {
     try {
       setError(null);
       setIsLoadingAnomaly(true);
-      const explanation = await explainAnomalyScore({ satelliteId });
+      const explanation = await explainAnomalyScore({satelliteId});
       setAnomalyExplanation(explanation);
     } catch (error) {
       setError("An error occurred while fetching anomaly explanation.");
@@ -282,13 +306,7 @@ export default function Home() {
               <CardTitle>Risk Score</CardTitle>
             </CardHeader>
             <CardContent>
-            <p className="text-2xl font-bold">
-              {riskScoreData ? `${riskScoreData.riskScore}%` : 'N/A'}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {riskScoreData ? riskScoreData.explanation : 'No risk score calculated.'}
-            </p>
-            <Button onClick={calculateRiskScore}>Calculate Risk</Button>
+              <RiskScoreDisplay riskScoreData={riskScoreData} calculateRiskScore={calculateRiskScore} />
             </CardContent>
           </Card>
 
@@ -328,29 +346,38 @@ export default function Home() {
         <div>
           <h2 className="font-semibold text-xl mb-2">Alerts</h2>
           <ScrollArea className="h-[300px] w-full rounded-md border">
-            <div className="p-4">
-              <Alert variant="destructive">
-                <AlertTitle>High Temperature Alert</AlertTitle>
-                <AlertDescription>
-                  Internal temperature exceeded threshold.
-                </AlertDescription>
-              </Alert>
-              <Alert className="mt-4">
-                <AlertTitle>Low Battery Voltage</AlertTitle>
-                <AlertDescription>
-                  Battery voltage is below the critical level.
-                </AlertDescription>
-              </Alert>
-              <Alert className="mt-4">
-                <AlertTitle>Communication Issue</AlertTitle>
-                <AlertDescription>
-                  Signal strength is weak, packet delay is high.
-                </AlertDescription>
-              </Alert>
-            </div>
+            <AlertList />
           </ScrollArea>
         </div>
       </div>
     </SidebarProvider>
+  );
+}
+
+function AlertList() {
+  const alerts = [
+    {
+      title: 'High Temperature Alert',
+      description: 'Internal temperature exceeded threshold.',
+    },
+    {
+      title: 'Low Battery Voltage',
+      description: 'Battery voltage is below the critical level.',
+    },
+    {
+      title: 'Communication Issue',
+      description: 'Signal strength is weak, packet delay is high.',
+    },
+  ];
+
+  return (
+    <div className="p-4">
+      {alerts.map((alert, index) => (
+        <Alert key={index} variant="destructive">
+          <AlertTitle>{alert.title}</AlertTitle>
+          <AlertDescription>{alert.description}</AlertDescription>
+        </Alert>
+      ))}
+    </div>
   );
 }

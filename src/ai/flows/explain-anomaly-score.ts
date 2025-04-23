@@ -57,7 +57,7 @@ const getTelemetryDataTool = ai.defineTool({
     }),
   }),
 }, async ({satelliteId}) => {
-  const data = await getTelemetryData({satelliteId});
+  const data = await getTelemetryData(satelliteId);
   return data;
 });
 

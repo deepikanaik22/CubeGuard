@@ -39,7 +39,7 @@ communicationLogs: { signalStrength: number; packetDelay: number };
  * @returns A promise that resolves to a TelemetryData object.
  */
 export async function getTelemetryData(satelliteId: string): Promise<TelemetryData> {
-  if (satelliteId.satelliteId === "sat1") {
+  if (satelliteId === "sat1") {
     return {
       gyroscope: { x: 0.1, y: -0.2, z: 0.3 },
       batteryVoltage: 4.2,
@@ -49,7 +49,7 @@ export async function getTelemetryData(satelliteId: string): Promise<TelemetryDa
       magnetometer: { x: 0.01, y: 0.02, z: 0.03 },
       communicationLogs: { signalStrength: -80, packetDelay: 150 },
     };
-  } else if (satelliteId.satelliteId === "sat2") {
+  } else if (satelliteId === "sat2") {
     return {
       gyroscope: { x: 0.5, y: 0.1, z: -0.3 },
       batteryVoltage: 3.8,
