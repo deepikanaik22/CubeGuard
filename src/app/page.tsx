@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarSeparator,
+  SidebarProvider,
 } from "@/components/ui/sidebar";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {
@@ -83,6 +84,35 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = ({riskScoreData, calcu
   );
 };
 
+function AlertList() {
+  const alerts = [
+    {
+      title: 'High Temperature Alert',
+      description: 'Internal temperature exceeded threshold.',
+    },
+    {
+      title: 'Low Battery Voltage',
+      description: 'Battery voltage is below the critical level.',
+    },
+    {
+      title: 'Communication Issue',
+      description: 'Signal strength is weak, packet delay is high.',
+    },
+  ];
+
+  return (
+    <div className="p-4">
+      {alerts.map((alert, index) => (
+        <Alert key={index} variant="destructive">
+          <AlertTitle>{alert.title}</AlertTitle>
+          <AlertDescription>{alert.description}</AlertDescription>
+        </Alert>
+      ))}
+    </div>
+  );
+}
+
+
 export default function Home() {
   const router = useRouter();
   const satelliteId = "cubesat-001";
@@ -152,7 +182,7 @@ export default function Home() {
   };
 
   return (
-    <>
+    <SidebarProvider>
       <Sidebar className="w-60">
         <SidebarHeader>
           <h2 className="font-semibold text-lg">CubeGuard</h2>
@@ -349,34 +379,6 @@ export default function Home() {
           </ScrollArea>
         </div>
       </div>
-    </>
-  );
-}
-
-function AlertList() {
-  const alerts = [
-    {
-      title: 'High Temperature Alert',
-      description: 'Internal temperature exceeded threshold.',
-    },
-    {
-      title: 'Low Battery Voltage',
-      description: 'Battery voltage is below the critical level.',
-    },
-    {
-      title: 'Communication Issue',
-      description: 'Signal strength is weak, packet delay is high.',
-    },
-  ];
-
-  return (
-    <div className="p-4">
-      {alerts.map((alert, index) => (
-        <Alert key={index} variant="destructive">
-          <AlertTitle>{alert.title}</AlertTitle>
-          <AlertDescription>{alert.description}</AlertDescription>
-        </Alert>
-      ))}
-    </div>
+    </SidebarProvider>
   );
 }

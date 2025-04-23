@@ -79,43 +79,44 @@ External Temperature: {{externalTemperature}}
 Magnetometer: x={{magnetometer.x}}, y={{magnetometer.y}}, z={{magnetometer.z}}Communication Logs: Signal Strength={{communicationLogs.signalStrength}}, Packet Delay={{communicationLogs.packetDelay}}{{/with}}`,
 });
 
+const getTelemetryDataTool = ai.defineTool({
+    name: 'getTelemetryData',
+    description: 'Retrieves the latest telemetry data for a given satellite.',
+    inputSchema: z.object({
+      satelliteId: z.string().describe('The ID of the satellite to retrieve telemetry data for.'),
+    }),
+    outputSchema: z.object({
+      gyroscope: z.object({
+        x: z.number(),
+        y: z.number(),
+        z: z.number(),
+      }),
+      batteryVoltage: z.number(),
+      solarPanelOutput: z.number(),
+      internalTemperature: z.number(),
+      externalTemperature: z.number(),
+      magnetometer: z.object({
+        x: z.number(),
+        y: z.number(),
+        z: z.number(),
+      }),
+      communicationLogs: z.object({
+        signalStrength: z.number(),
+        packetDelay: z.number(),
+      }),
+    }),
+  },
+  async ({satelliteId}) => {
+    const data = await getTelemetryData(satelliteId);
+    return data;
+  }
+);
+
 const explainAnomalyScoreFlow = ai.defineFlow({
   name: 'explainAnomalyScoreFlow',
   inputSchema: ExplainAnomalyScoreInputSchema,
   outputSchema: ExplainAnomalyScoreOutputSchema,
-  tools: [
-    {
-      name: 'getTelemetryData',
-      description: 'Retrieves the latest telemetry data for a given satellite.',
-      inputSchema: z.object({
-        satelliteId: z.string().describe('The ID of the satellite to retrieve telemetry data for.'),
-      }),
-      outputSchema: z.object({
-        gyroscope: z.object({
-          x: z.number(),
-          y: z.number(),
-          z: z.number(),
-        }),
-        batteryVoltage: z.number(),
-        solarPanelOutput: z.number(),
-        internalTemperature: z.number(),
-        externalTemperature: z.number(),
-        magnetometer: z.object({
-          x: z.number(),
-          y: z.number(),
-          z: z.number(),
-        }),
-        communicationLogs: z.object({
-          signalStrength: z.number(),
-          packetDelay: z.number(),
-        }),
-      }),
-      impl: async ({satelliteId}) => {
-        const data = await getTelemetryData(satelliteId);
-        return data;
-      }
-    }
-  ],
+  tools: [getTelemetryDataTool],
 }, async (input) => {
   const telemetryData = await getTelemetryData(input.satelliteId);
   const result = await prompt({
