@@ -38,6 +38,16 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { explainAnomalyScore } from "@/ai/flows/explain-anomaly-score";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
 import { Separator } from "@/components/ui/separator";
 
 const data = [
@@ -50,31 +60,35 @@ const data = [
   { name: "01:30", uv: 349, pv: 4300, amt: 2100 },
 ];
 
-export default function Home() {
+export default function Home() { 
   const satelliteId = "cubesat-001";
-  const [telemetry, setTelemetry] = useState(null);
-  const [anomalyExplanation, setAnomalyExplanation] = useState(null);
+  const [telemetry, setTelemetry] = useState<any>(null);
+  const [anomalyExplanation, setAnomalyExplanation] = useState<any>(null);
+  const [isLoadingAnomaly, setIsLoadingAnomaly] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTelemetry = async () => {
-      const data = await getTelemetryData(satelliteId);
+      const data = await getTelemetryData({satelliteId});
       setTelemetry(data);
     };
-
-    const fetchAnomalyExplanation = async () => {
-      const explanation = await explainAnomalyScore({ satelliteId });
-      setAnomalyExplanation(explanation);
-    };
-
     fetchTelemetry();
-    fetchAnomalyExplanation();
-  }, []);
+  }, [satelliteId]);
 
-  const anomalyRiskScore =
-    anomalyExplanation?.breakdown?.comm +
-      anomalyExplanation?.breakdown?.orientation +
-      anomalyExplanation?.breakdown?.power +
-      anomalyExplanation?.breakdown?.thermal || 0;
+  const fetchAnomalyExplanation = async () => {
+    try {
+      setError(null);
+      setIsLoadingAnomaly(true);
+      const explanation = await explainAnomalyScore({ satelliteId: "sat1" });
+      setAnomalyExplanation(explanation);
+    } catch (error) {
+      setError("An error occurred while fetching anomaly explanation.");
+      console.error("Error fetching anomaly explanation:", error);
+    } finally {
+      setIsLoadingAnomaly(false);
+    }
+  };
+
 
   return (
     <SidebarProvider>
@@ -118,6 +132,19 @@ export default function Home() {
           <h1 className="font-semibold text-2xl">
             Satellite Telemetry Dashboard
           </h1>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button onClick={fetchAnomalyExplanation}>
+                Get anomaly score
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Anomaly Explanation</DialogTitle>
+                <DialogDescription>{anomalyExplanation?.explanation}</DialogDescription>
+              </DialogHeader>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <Separator className="my-4" />
@@ -176,13 +203,16 @@ export default function Home() {
               <CardTitle>Anomaly Risk Score</CardTitle>
             </CardHeader>
             <CardContent>
-              {anomalyExplanation ? (
+              {!isLoadingAnomaly && anomalyExplanation ? (
                 <>
-                  <div className="text-2xl font-bold">{anomalyRiskScore}%</div>
-                  <p>Likely Failure Type: Thermal</p>
-                  <p className="text-sm text-muted-foreground">
-                    {anomalyExplanation?.explanation}
-                  </p>
+                  <div className="text-2xl font-bold">
+                    {anomalyExplanation.breakdown.comm + anomalyExplanation.breakdown.orientation + anomalyExplanation.breakdown.power + anomalyExplanation.breakdown.thermal}
+                  %
+                  </div>
+                  
+                  {error && (
+                    <p className="text-red-500">{error}</p>
+                  )}
                   <Separator className="my-2" />
                   <p className="text-sm">Breakdown:</p>
                   <ul className="list-disc list-inside text-sm">
@@ -193,6 +223,9 @@ export default function Home() {
                       Orientation: {anomalyExplanation?.breakdown?.orientation}%
                     </li>
                   </ul>
+                    <p className="text-sm text-muted-foreground">
+                      {anomalyExplanation?.explanation}
+                    </p>
                 </>
               ) : (
                 <Skeleton className="h-24 w-full" />

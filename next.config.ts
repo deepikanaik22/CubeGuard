@@ -18,6 +18,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  experimental: {
+    allowedDevOrigins: ['3001-idx-studio-1745413977913.cluster-zkm2jrwbnbd4awuedc2alqxrpk.cloudworkstations.dev'],
+  },
 };
 
 export default nextConfig;

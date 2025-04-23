@@ -8,7 +8,7 @@
  */
 
 import {ai} from '@/ai/ai-instance';
-import {TelemetryData} from '@/services/telemetry';
+import {TelemetryData, getTelemetryData} from '@/services/telemetry';
 import {z} from 'genkit';
 
 const ExplainAnomalyScoreInputSchema = z.object({
@@ -27,9 +27,8 @@ const ExplainAnomalyScoreOutputSchema = z.object({
 });
 export type ExplainAnomalyScoreOutput = z.infer<typeof ExplainAnomalyScoreOutputSchema>;
 
-export async function explainAnomalyScore(input: ExplainAnomalyScoreInput): Promise<ExplainAnomalyScoreOutput> {
-  return explainAnomalyScoreFlow(input);
-}
+export const explainAnomalyScore = async (input: ExplainAnomalyScoreInput): Promise<ExplainAnomalyScoreOutput> =>
+  explainAnomalyScoreFlow(input);
 
 const getTelemetryDataTool = ai.defineTool({
   name: 'getTelemetryData',
@@ -57,18 +56,17 @@ const getTelemetryDataTool = ai.defineTool({
       packetDelay: z.number(),
     }),
   }),
-},
-async input => {
-    const telemetryData = await getTelemetryData(input.satelliteId);
-    return telemetryData;
-  }
-);
+}, async ({satelliteId}) => {
+  const data = await getTelemetryData({satelliteId});
+  return data;
+});
 
-const prompt = ai.definePrompt({
+const prompt = ai.definePrompt<{ telemetryData: TelemetryData; satelliteId: string}, ExplainAnomalyScoreOutput>({
   name: 'explainAnomalyScorePrompt',
-  tools: [getTelemetryDataTool],
   input: {
-    schema: z.object({
+    schema: z.object({}),
+    contextSchema: z.object({
+      telemetryData: z.any(),
       satelliteId: z.string().describe('The ID of the satellite to explain the anomaly score for.'),
     }),
   },
@@ -87,9 +85,7 @@ const prompt = ai.definePrompt({
 
 You will receive a request to explain the anomaly score for a specific satellite. Your task is to provide a detailed explanation of how the Anomaly Risk Score was calculated, including the factors that contribute to the risk and a breakdown by failure type (thermal, comm, power, orientation).
 
-First, use the getTelemetryData tool to obtain the latest telemetry data for the specified satellite.
-
-Then, analyze the telemetry data to identify any potential anomalies or deviations from expected values. Consider the following factors:
+Analyze the telemetry data which is provided below to identify any potential anomalies or deviations from expected values. Consider the following factors:
 
 *   Gyroscope data: Unusual fluctuations or drift may indicate orientation problems.
 *   Battery voltage: Low voltage may indicate power issues.
@@ -102,29 +98,30 @@ Based on your analysis, provide a clear and concise explanation of how the Anoma
 
 Finally, provide a breakdown of the risk score by failure type (thermal, comm, power, orientation), indicating the percentage contribution of each factor to the overall risk score.
 
-Satellite ID: {{{satelliteId}}}
-
+Satellite ID: {{satelliteId}}
 Here is the telemetry data:
-{{#with (await getTelemetryDataTool satelliteId=satelliteId)}}
+{{#with telemetryData}}
 Gyroscope: x={{gyroscope.x}}, y={{gyroscope.y}}, z={{gyroscope.z}}
 Battery Voltage: {{batteryVoltage}}
 Solar Panel Output: {{solarPanelOutput}}
 Internal Temperature: {{internalTemperature}}
 External Temperature: {{externalTemperature}}
-Magnetometer: x={{magnetometer.x}}, y={{magnetometer.y}}, z={{magnetometer.z}}
-Communication Logs: Signal Strength={{communicationLogs.signalStrength}}, Packet Delay={{communicationLogs.packetDelay}}
-{{/with}}
-`,
+Magnetometer: x={{magnetometer.x}}, y={{magnetometer.y}}, z={{magnetometer.z}}Communication Logs: Signal Strength={{communicationLogs.signalStrength}}, Packet Delay={{communicationLogs.packetDelay}}{{/with}}`,
 });
 
-const explainAnomalyScoreFlow = ai.defineFlow<
-  typeof ExplainAnomalyScoreInputSchema,
-  typeof ExplainAnomalyScoreOutputSchema
->({
+const explainAnomalyScoreFlow = ai.defineFlow({
   name: 'explainAnomalyScoreFlow',
   inputSchema: ExplainAnomalyScoreInputSchema,
   outputSchema: ExplainAnomalyScoreOutputSchema,
-}, async input => {
-  const {output} = await prompt(input);
-  return output!;
+  tools: {getTelemetryData: getTelemetryDataTool},
+}, async (input, context) => {
+  const {getTelemetryData} = context.tools;
+
+  const telemetryData = await getTelemetryData({satelliteId: input.satelliteId});
+  const result = await prompt({
+    telemetryData,
+    satelliteId: input.satelliteId,
+  });
+
+  return result.output;
 });
