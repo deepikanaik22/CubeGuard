@@ -35,7 +35,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { explainAnomalyScore } from "@/ai/flows/explain-anomaly-score";
+import { explainAnomalyScore, ExplainAnomalyScoreOutput } from "@/ai/flows/explain-anomaly-score";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -316,7 +316,7 @@ interface AnomalyExplanationDialogProps {
 }
 
 function AnomalyExplanationDialog({ satelliteId }: AnomalyExplanationDialogProps) {
-  const [anomalyExplanation, setAnomalyExplanation] = React.useState<any>(null);
+  const [anomalyExplanation, setAnomalyExplanation] = React.useState<ExplainAnomalyScoreOutput | null>(null);
   const [isLoadingAnomaly, setIsLoadingAnomaly] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
