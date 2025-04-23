@@ -8,8 +8,9 @@
  */
 
 import {ai} from '@/ai/ai-instance';
-import {TelemetryData, getTelemetryData} from '@/services/telemetry';
+import {TelemetryData} from '@/services/telemetry';
 import {z} from 'genkit';
+import {getTelemetryData} from "@/services/telemetry";
 
 const ExplainAnomalyScoreInputSchema = z.object({
   satelliteId: z.string().describe('The ID of the satellite to explain the anomaly score for.'),
@@ -30,38 +31,7 @@ export type ExplainAnomalyScoreOutput = z.infer<typeof ExplainAnomalyScoreOutput
 export const explainAnomalyScore = async (input: ExplainAnomalyScoreInput): Promise<ExplainAnomalyScoreOutput> =>
   explainAnomalyScoreFlow(input);
 
-const getTelemetryDataTool = ai.defineTool({
-  name: 'getTelemetryData',
-  description: 'Retrieves the latest telemetry data for a given satellite.',
-  inputSchema: z.object({
-    satelliteId: z.string().describe('The ID of the satellite to retrieve telemetry data for.'),
-  }),
-  outputSchema: z.object({
-    gyroscope: z.object({
-      x: z.number(),
-      y: z.number(),
-      z: z.number(),
-    }),
-    batteryVoltage: z.number(),
-    solarPanelOutput: z.number(),
-    internalTemperature: z.number(),
-    externalTemperature: z.number(),
-    magnetometer: z.object({
-      x: z.number(),
-      y: z.number(),
-      z: z.number(),
-    }),
-    communicationLogs: z.object({
-      signalStrength: z.number(),
-      packetDelay: z.number(),
-    }),
-  }),
-}, async ({satelliteId}) => {
-  const data = await getTelemetryData(satelliteId);
-  return data;
-});
-
-const prompt = ai.definePrompt<{ telemetryData: TelemetryData; satelliteId: string}, ExplainAnomalyScoreOutput>({
+const prompt = ai.definePrompt<{ telemetryData: TelemetryData; satelliteId: string }, ExplainAnomalyScoreOutput>({
   name: 'explainAnomalyScorePrompt',
   input: {
     schema: z.object({}),
@@ -113,9 +83,41 @@ const explainAnomalyScoreFlow = ai.defineFlow({
   name: 'explainAnomalyScoreFlow',
   inputSchema: ExplainAnomalyScoreInputSchema,
   outputSchema: ExplainAnomalyScoreOutputSchema,
-  tools: [getTelemetryDataTool],
-}, async (input, context) => {
-  const telemetryData = await context.tools.getTelemetryData({satelliteId: input.satelliteId});
+  tools: [
+    {
+      name: 'getTelemetryData',
+      description: 'Retrieves the latest telemetry data for a given satellite.',
+      inputSchema: z.object({
+        satelliteId: z.string().describe('The ID of the satellite to retrieve telemetry data for.'),
+      }),
+      outputSchema: z.object({
+        gyroscope: z.object({
+          x: z.number(),
+          y: z.number(),
+          z: z.number(),
+        }),
+        batteryVoltage: z.number(),
+        solarPanelOutput: z.number(),
+        internalTemperature: z.number(),
+        externalTemperature: z.number(),
+        magnetometer: z.object({
+          x: z.number(),
+          y: z.number(),
+          z: z.number(),
+        }),
+        communicationLogs: z.object({
+          signalStrength: z.number(),
+          packetDelay: z.number(),
+        }),
+      }),
+      impl: async ({satelliteId}) => {
+        const data = await getTelemetryData(satelliteId);
+        return data;
+      }
+    }
+  ],
+}, async (input) => {
+  const telemetryData = await getTelemetryData(input.satelliteId);
   const result = await prompt({
     telemetryData,
     satelliteId: input.satelliteId,

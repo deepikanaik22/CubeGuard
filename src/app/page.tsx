@@ -8,7 +8,6 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarProvider,
   SidebarTrigger,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
@@ -153,7 +152,7 @@ export default function Home() {
   };
 
   return (
-    <SidebarProvider>
+    <>
       <Sidebar className="w-60">
         <SidebarHeader>
           <h2 className="font-semibold text-lg">CubeGuard</h2>
@@ -350,7 +349,7 @@ export default function Home() {
           </ScrollArea>
         </div>
       </div>
-    </SidebarProvider>
+    </>
   );
 }
 

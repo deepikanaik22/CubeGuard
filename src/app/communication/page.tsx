@@ -4,13 +4,13 @@ import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {Separator} from '@/components/ui/separator';
 import {Sidebar, SidebarTrigger} from '@/components/ui/sidebar';
 
-export default function CommunicationPage() {
-  const communicationData = {
-    signalStrength: '-75 dBm',
-    packetDelay: '120 ms',
-    lastContact: '2 minutes ago',
-  };
+const communicationData = {
+  signalStrength: '-75 dBm',
+  packetDelay: '120 ms',
+  lastContact: '2 minutes ago',
+};
 
+export default function CommunicationPage() {
   return (
     <div>
       <div className="flex items-center space-x-4">
@@ -54,4 +54,3 @@ export default function CommunicationPage() {
     </div>
   );
 }
-

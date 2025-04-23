@@ -6,30 +6,30 @@ import {Separator} from '@/components/ui/separator';
 import {Sidebar, SidebarTrigger} from '@/components/ui/sidebar';
 import React from 'react';
 
-export default function AlertsPage() {
-  const alerts = [
-    {
-      title: 'High Temperature Alert',
-      description: 'Internal temperature exceeded threshold.',
-    },
-    {
-      title: 'Low Battery Voltage',
-      description: 'Battery voltage is below the critical level.',
-    },
-    {
-      title: 'Communication Issue',
-      description: 'Signal strength is weak, packet delay is high.',
-    },
-    {
-      title: 'Orientation Drift',
-      description: 'Satellite orientation is drifting outside acceptable parameters.',
-    },
-    {
-      title: 'Solar Panel Degradation',
-      description: 'Solar panel output has decreased significantly.',
-    },
-  ];
+const alerts = [
+  {
+    title: 'High Temperature Alert',
+    description: 'Internal temperature exceeded threshold.',
+  },
+  {
+    title: 'Low Battery Voltage',
+    description: 'Battery voltage is below the critical level.',
+  },
+  {
+    title: 'Communication Issue',
+    description: 'Signal strength is weak, packet delay is high.',
+  },
+  {
+    title: 'Orientation Drift',
+    description: 'Satellite orientation is drifting outside acceptable parameters.',
+  },
+  {
+    title: 'Solar Panel Degradation',
+    description: 'Solar panel output has decreased significantly.',
+  },
+];
 
+export default function AlertsPage() {
   return (
     <div>
       <div className="flex items-center space-x-4">
@@ -55,4 +55,3 @@ export default function AlertsPage() {
     </div>
   );
 }
-
