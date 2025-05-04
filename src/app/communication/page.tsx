@@ -1,20 +1,22 @@
+
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
   Mail,
-  SignalHigh, // Better icon for Signal Strength
-  Clock, // Icon for Last Contact
-  Timer, // Icon for Packet Delay
-  AlertTriangle, // For errors
+  SignalHigh,
+  Clock,
+  Timer,
+  AlertTriangle,
+  Rocket, // Added Rocket icon
 } from "lucide-react";
 import React, { useState, useEffect } from 'react';
-import { subscribeToTelemetryData, TelemetryData } from '@/services/telemetry'; // Import subscription
-import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
-import { formatDistanceToNowStrict } from 'date-fns'; // Use strict for cleaner output
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import Alert components
-import { useSatellite } from '@/context/SatelliteContext'; // Import useSatellite
+import { subscribeToTelemetryData, TelemetryData } from '@/services/telemetry'; // Using simulated source
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatDistanceToNowStrict } from 'date-fns';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useSatellite } from '@/context/SatelliteContext';
 
 export default function CommunicationPage() {
   const { selectedSatelliteId } = useSatellite(); // Get selected satellite ID
@@ -36,13 +38,14 @@ export default function CommunicationPage() {
     setTelemetry(null); // Clear previous data
 
     const unsubscribe = subscribeToTelemetryData(selectedSatelliteId, (data) => {
-       console.log("Received telemetry data on communication page:", data);
-      setTelemetry(data);
-      setError(null); // Clear error on new data
+       // console.log("Received telemetry data on communication page:", data); // Optional logging
+       setIsLoading(false); // Stop loading once data/null arrives
+       setTelemetry(data);
+       setError(null); // Clear error on new data
       if (data === null) {
          console.warn(`No telemetry data found for ${selectedSatelliteId} on communication page.`);
+         // Show 'waiting for data' state
       }
-      setIsLoading(false); // Stop loading
     }, (subError) => { // Handle subscription errors
         console.error("Telemetry subscription error on communication page:", subError);
         setError(`Failed to subscribe to telemetry for ${selectedSatelliteId}.`);
@@ -50,25 +53,25 @@ export default function CommunicationPage() {
         setTelemetry(null);
     });
 
-    // Clean up subscription on component unmount
+    // Clean up subscription on component unmount or satellite change
     return () => {
       console.log("Unsubscribing from telemetry for communication page:", selectedSatelliteId);
       unsubscribe();
     };
   }, [selectedSatelliteId, isClient]); // Re-subscribe when satellite ID or mount status changes
 
-   // Format last contact time from Firestore timestamp
+
+   // Format last contact time from telemetry timestamp
    const getLastContactTime = () => {
      if (!telemetry?.timestamp) return 'N/A';
      try {
-        // Convert Firestore Timestamp or JS Date to JS Date
-        const lastContactDate = telemetry.timestamp instanceof Date
-          ? telemetry.timestamp
-          : telemetry.timestamp?.toDate?.(); // Handle potential Firestore Timestamp
+       // Simulated data uses JS Date objects directly
+       const lastContactDate = telemetry.timestamp;
 
-        if (!(lastContactDate instanceof Date) || isNaN(lastContactDate.getTime())) {
-             return 'Invalid date';
-        }
+       if (!(lastContactDate instanceof Date) || isNaN(lastContactDate.getTime())) {
+            return 'Invalid date';
+       }
+       // Use strict formatting for cleaner output like "5 seconds ago"
        return formatDistanceToNowStrict(lastContactDate, { addSuffix: true });
      } catch (e) {
        console.error("Error formatting timestamp:", e);
@@ -82,9 +85,10 @@ export default function CommunicationPage() {
         return { text: 'Unknown', color: 'text-muted-foreground' };
       }
       const signal = telemetry.communicationLogs.signalStrength;
-      if (signal >= -80) return { text: 'Strong signal', color: 'text-green-600' };
-      if (signal >= -90) return { text: 'Weak signal', color: 'text-yellow-600' };
-      return { text: 'Very weak signal', color: 'text-red-600' };
+      if (signal >= -80) return { text: 'Strong signal', color: 'text-green-600 dark:text-green-400' };
+      if (signal >= -90) return { text: 'Fair signal', color: 'text-yellow-600 dark:text-yellow-400' };
+      if (signal >= -95) return { text: 'Weak signal', color: 'text-orange-600 dark:text-orange-400' };
+      return { text: 'Very weak signal', color: 'text-red-600 dark:text-red-400' };
     };
 
    // Determine packet delay status text and color
@@ -93,55 +97,64 @@ export default function CommunicationPage() {
        return { text: 'Unknown', color: 'text-muted-foreground' };
      }
       const delay = telemetry.communicationLogs.packetDelay;
-      if (delay <= 150) return { text: 'Low delay', color: 'text-green-600' };
-      if (delay <= 250) return { text: 'Moderate delay', color: 'text-yellow-600' };
-      return { text: 'High delay', color: 'text-red-600' };
+      if (delay <= 150) return { text: 'Low delay', color: 'text-green-600 dark:text-green-400' };
+      if (delay <= 250) return { text: 'Moderate delay', color: 'text-yellow-600 dark:text-yellow-400' };
+      if (delay <= 300) return { text: 'High delay', color: 'text-orange-600 dark:text-orange-400' };
+      return { text: 'Critical delay', color: 'text-red-600 dark:text-red-400' };
    };
 
+   // Calculate status info dynamically
    const statusInfo = getStatusInfo();
    const delayInfo = getDelayInfo();
 
 
-    // Render skeleton during SSR or initial client loading
-    if (!isClient || isLoading) {
-     return (
-        <div className="space-y-4">
-             <Skeleton className="h-8 w-1/3" />
-             <Separator/>
-             <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                 <Card><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-10 w-3/4" /></CardContent></Card>
-                 <Card><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-10 w-3/4" /></CardContent></Card>
-                 <Card><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-10 w-3/4" /></CardContent></Card>
-             </div>
-         </div>
-     );
-   }
+    // Render skeleton during initial client loading or data fetching
+    const renderSkeleton = () => (
+       <div className="space-y-4 p-4"> {/* Added padding */}
+            <Skeleton className="h-8 w-1/3" />
+            <Separator/>
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                {[...Array(3)].map((_, i) => ( // Render 3 skeleton cards
+                  <Card key={i}>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <Skeleton className="h-5 w-2/5" />
+                          <Skeleton className="h-4 w-4" />
+                      </CardHeader>
+                      <CardContent>
+                          <Skeleton className="h-8 w-1/2 mb-1" />
+                          <Skeleton className="h-3 w-3/4" />
+                      </CardContent>
+                  </Card>
+                ))}
+            </div>
+        </div>
+    );
 
 
   return (
-    <>
-      {/* Sidebar is now in layout.tsx */}
-      <div className="flex-1"> {/* Removed p-4, handled by layout */}
+     // The main layout including Sidebar is handled by src/app/layout.tsx
+    <div className="flex-1"> {/* This div takes up the remaining space */}
+      <div className="p-4"> {/* Add padding to the content area */}
         <h1 className="font-semibold text-2xl mb-4">Communication Status ({selectedSatelliteId})</h1>
+         <Separator className="mb-6"/>
 
-         {error && (
+          {/* Conditional Rendering: Loading, Error, No Data, Comm Data */}
+         {!isClient || isLoading ? (
+             renderSkeleton()
+         ) : error ? (
            <Alert variant="destructive" className="my-4">
              <AlertTriangle className="h-4 w-4" />
-             <AlertTitle>Error</AlertTitle>
+             <AlertTitle>Error Loading Communication Data</AlertTitle>
              <AlertDescription>{error}</AlertDescription>
            </Alert>
-          )}
-
-         {!telemetry && !error && !isLoading && (
+          ) : !telemetry ? (
               <Alert variant="default" className="my-4">
-                 <Mail className="h-4 w-4" />
+                 <Rocket className="h-4 w-4" />
                  <AlertTitle>Waiting for Data</AlertTitle>
-                 <AlertDescription>No communication data received yet for {selectedSatelliteId}. Ensure data is being sent.</AlertDescription>
+                 <AlertDescription>No communication data received yet for {selectedSatelliteId}. Ensure simulation is running or data source is active.</AlertDescription>
              </Alert>
-         )}
-
-        {/* Display Communication Data from Real-time Telemetry */}
-        {telemetry && (
+         ) : (
+         // Display Communication Data
          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
            <Card>
              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -150,9 +163,9 @@ export default function CommunicationPage() {
              </CardHeader>
              <CardContent>
                  <div className="text-2xl font-bold">
-                   {telemetry.communicationLogs?.signalStrength != null ? `${telemetry.communicationLogs.signalStrength} dBm` : 'N/A'}
+                   {telemetry.communicationLogs?.signalStrength != null ? `${telemetry.communicationLogs.signalStrength.toFixed(0)} dBm` : 'N/A'}
                  </div>
-                 <p className={`text-xs ${statusInfo.color}`}>
+                 <p className={`text-xs font-medium ${statusInfo.color}`}>
                      {statusInfo.text}
                  </p>
              </CardContent>
@@ -165,9 +178,9 @@ export default function CommunicationPage() {
              </CardHeader>
              <CardContent>
                   <div className="text-2xl font-bold">
-                    {telemetry.communicationLogs?.packetDelay != null ? `${telemetry.communicationLogs.packetDelay} ms` : 'N/A'}
+                    {telemetry.communicationLogs?.packetDelay != null ? `${telemetry.communicationLogs.packetDelay.toFixed(0)} ms` : 'N/A'}
                    </div>
-                  <p className={`text-xs ${delayInfo.color}`}>
+                  <p className={`text-xs font-medium ${delayInfo.color}`}>
                       {delayInfo.text}
                   </p>
              </CardContent>
@@ -186,17 +199,10 @@ export default function CommunicationPage() {
          </div>
          )}
 
-        {/* Optionally add a chart for signal strength/delay over time */}
+        {/* Optionally add charts here later */}
         {/* <Separator className="my-6" />
-        <Card>
-           <CardHeader>
-             <CardTitle>Communication History (Example)</CardTitle>
-           </CardHeader>
-           <CardContent>
-             <Skeleton className="h-[200px] w-full" />
-           </CardContent>
-         </Card> */}
+        <Card> ... </Card> */}
       </div>
-    </>
+    </div>
   );
 }

@@ -1,8 +1,9 @@
+
 'use client';
 import type {Metadata} from 'next';
-import {Geist, Geist_Mono} from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google'; // Correct import if using next/font
 import './globals.css';
-import {SatelliteProvider} from '@/context/SatelliteContext';
+import { SatelliteProvider } from '@/context/SatelliteContext';
 import {
   Sidebar,
   SidebarContent,
@@ -11,7 +12,7 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarProvider,
+  SidebarProvider, // Ensure SidebarProvider is imported
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
@@ -21,71 +22,74 @@ import {
   AlertTriangle,
   Cpu,
   Mail,
+  Rocket, // Use Rocket icon consistently
 } from 'lucide-react';
-import {useRouter, usePathname} from 'next/navigation';
-import {Badge} from '@/components/ui/badge'; // Assuming you might want alerts badge here later
+import { useRouter, usePathname } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 import SatelliteSelector from '@/components/SatelliteSelector';
-import {useEffect, useState} from 'react';
-import { subscribeToTelemetryData, TelemetryData } from '@/services/telemetry'; // Import for alert count
+import { useEffect, useState } from 'react';
+import { subscribeToTelemetryData, TelemetryData } from '@/services/telemetry';
+import { useSatellite } from '@/context/SatelliteContext'; // Import context hook
 
-const geistSans = Geist({
+const geistSans = Geist({ // Correct usage if library provides it this way
   variable: '--font-geist-sans',
   subsets: ['latin'],
 });
 
-const geistMono = Geist_Mono({
+const geistMono = Geist_Mono({ // Correct usage
   variable: '--font-geist-mono',
   subsets: ['latin'],
 });
 
-// export const metadata: Metadata = { // Metadata cannot be used in 'use client' components
-//   title: 'CubeSense',
-//   description: 'Satellite Anomaly Detection Dashboard',
-// };
+// Client component, cannot use export const metadata
+// Use <head> tags directly within the RootLayout component return
 
-
-// Shared Sidebar Component
+// Shared Sidebar Component - Needs context to get selectedSatelliteId
 function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const { setOpenMobile } = useSidebar();
   const [destructiveAlertCount, setDestructiveAlertCount] = useState(0);
-  // In a real app, get satelliteId from context
-  const satelliteId = "cubesat-001"; // Placeholder
+  const { selectedSatelliteId } = useSatellite(); // Get ID from context
 
-  // Basic alert count logic (similar to alerts page, needs context for satelliteId)
+  // Alert count logic based on telemetry subscription
   useEffect(() => {
-    const unsubscribe = subscribeToTelemetryData(satelliteId, (data) => {
+    if (!selectedSatelliteId) return; // Don't subscribe if no satellite is selected
+
+    const unsubscribe = subscribeToTelemetryData(selectedSatelliteId, (data) => {
       if (data) {
-        // Simplified alert logic for badge count
+        // Simplified critical alert logic for badge count
         let count = 0;
-        if (data.internalTemperature > 35) count++;
-        if (data.batteryVoltage < 3.7) count++;
-        if (data.communicationLogs?.signalStrength < -90) count++;
-        if (data.communicationLogs?.packetDelay > 250) count++;
+        if (data.internalTemperature > 38) count++; // Critical temp
+        if (data.batteryVoltage < 3.65) count++; // Critical voltage
+        if (data.communicationLogs?.signalStrength < -95) count++; // Critical signal
+        if (data.communicationLogs?.packetDelay > 300) count++; // Critical delay
         setDestructiveAlertCount(count);
       } else {
         setDestructiveAlertCount(0);
       }
     }, (error) => {
       console.error("Error getting alert count for sidebar:", error);
-      setDestructiveAlertCount(0);
+      setDestructiveAlertCount(0); // Reset on error
     });
 
-    return () => unsubscribe();
-  }, [satelliteId]);
-
+    return () => unsubscribe(); // Cleanup subscription
+  }, [selectedSatelliteId]); // Re-subscribe if satellite changes
 
   const handleNavigation = (path: string) => {
-    setOpenMobile(false);
+    setOpenMobile(false); // Close mobile sidebar on navigation
     router.push(path);
   };
 
   return (
-    <Sidebar className="w-60 hidden md:flex md:flex-col"> {/* Hide on mobile, use Sheet */}
+    // Sidebar structure using components from ui/sidebar
+    <Sidebar className="w-60 hidden md:flex md:flex-col"> {/* Hidden on mobile */}
       <SidebarHeader>
-         <div className="flex flex-col gap-2 p-2">
-           <h2 className="font-semibold text-lg">CubeSense</h2>
+         <div className="flex flex-col gap-2 p-4"> {/* Added padding */}
+           <div className="flex items-center gap-2">
+              <Rocket className="h-6 w-6 text-primary" /> {/* App Icon */}
+              <h2 className="font-semibold text-lg">CubeSense</h2>
+            </div>
            <SatelliteSelector />
          </div>
       </SidebarHeader>
@@ -118,35 +122,15 @@ function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <p className="text-xs text-muted-foreground">
-          CubeSense Monitoring
+        <p className="text-xs text-muted-foreground p-4"> {/* Added padding */}
+          CubeSense Monitoring v1.0
         </p>
       </SidebarFooter>
     </Sidebar>
   );
 }
 
-// Mobile Sidebar using Sheet
-function MobileSidebar() {
-    const router = useRouter();
-    const pathname = usePathname();
-    const { openMobile, setOpenMobile } = useSidebar();
-    // Alert count logic similar to AppSidebar can be added if needed
-
-    const handleNavigation = (path: string) => {
-        setOpenMobile(false);
-        router.push(path);
-    };
-
-    // Note: The Sheet content needs to be structured correctly within the layout
-    // This component might just trigger the Sheet which is defined elsewhere,
-    // or the Sheet needs to be part of the main layout structure controlled by SidebarProvider.
-    // For simplicity, the SidebarTrigger in the main content area will handle opening.
-    // The actual Sheet content can mirror the AppSidebar structure.
-     return null; // Trigger is usually placed in the main content header
-}
-
-
+// Root Layout Component
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -155,23 +139,30 @@ export default function RootLayout({
   return (
     <html lang="en">
        <head>
-         <title>CubeSense</title>
-         <meta name="description" content="Satellite Anomaly Detection Dashboard" />
+         {/* Metadata can be placed directly in <head> for client components */}
+         <title>CubeSense - Satellite Monitoring</title>
+         <meta name="description" content="Real-time CubeSat anomaly detection dashboard powered by AI." />
+          {/* Add favicon links here if you have them */}
        </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+       {/* Apply font variables to the body */}
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+         {/* Wrap the entire application that needs satellite context */}
         <SatelliteProvider>
+          {/* Wrap the entire application that needs sidebar context */}
           <SidebarProvider>
-             <div className="flex min-h-screen">
-               <AppSidebar /> {/* Sidebar for desktop */}
+             <div className="flex min-h-screen bg-background">
+               {/* Render the AppSidebar which uses SatelliteContext */}
+               <AppSidebar />
                 {/* Main content area */}
                <main className="flex-1 flex flex-col">
-                 {/* Header for mobile trigger */}
-                  <header className="p-4 border-b md:hidden flex items-center gap-2">
-                     <SidebarTrigger />
-                     <h1 className="font-semibold text-xl">CubeSense</h1>
-                  </header>
-                 {/* Page content */}
-                 <div className="flex-1 p-4">
+                 {/* Optional Header for mobile view or global actions */}
+                 <header className="sticky top-0 z-10 flex h-[57px] items-center gap-1 border-b bg-background px-4 md:hidden">
+                    <SidebarTrigger className="md:hidden"/>
+                    <h1 className="text-xl font-semibold">CubeSense</h1>
+                    {/* Add other header elements like user profile if needed */}
+                 </header>
+                 {/* The actual page content passed as children */}
+                 <div className="flex-1"> {/* Let content area grow */}
                    {children}
                  </div>
                </main>
