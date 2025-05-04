@@ -1,3 +1,4 @@
+
 'use client';
 import dynamic from 'next/dynamic';
 import {
@@ -10,7 +11,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarSeparator,
-  useSidebar
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {
@@ -22,7 +23,8 @@ import {
   AlertTriangle,
   Cpu,
 } from "lucide-react";
-import {getTelemetryData, TelemetryData} from "@/services/telemetry";
+// Import subscribeToTelemetryData instead of getTelemetryData
+import { subscribeToTelemetryData, TelemetryData } from '@/services/telemetry';
 import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
 import {Badge} from "@/components/ui/badge";
 import {
@@ -55,8 +57,8 @@ import {getRiskScore, GetRiskScoreOutput} from "@/ai/flows/get-risk-score";
 import React, {useState, useEffect, useCallback} from 'react';
 import {useRouter} from 'next/navigation';
 
-
-const data = [
+// Example static data for chart
+const chartData = [
   {name: "00:00", uv: 400, pv: 2400, amt: 2400},
   {name: "00:15", uv: 300, pv: 1398, amt: 2210},
   {name: "00:30", uv: 200, pv: 9800, amt: 2290},
@@ -70,19 +72,35 @@ interface RiskScoreDisplayProps {
   riskScoreData: GetRiskScoreOutput | null;
   calculateRiskScore: () => void;
   isLoading: boolean;
+  telemetry: TelemetryData | null; // Pass telemetry to determine input values
 }
 
-const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = ({riskScoreData, calculateRiskScore, isLoading}) => {
+const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = ({riskScoreData, calculateRiskScore, isLoading, telemetry}) => {
+  // Determine input values based on current telemetry if available
+  const batteryLevel = telemetry ? Math.round((telemetry.batteryVoltage / 4.2) * 100) : 50; // Example conversion
+  const temperature = telemetry ? telemetry.internalTemperature : 25;
+  // Determine comm status based on signal strength (example logic)
+  let communicationStatus: "stable" | "unstable" | "lost" = "stable";
+   if (telemetry) {
+     if (telemetry.communicationLogs.signalStrength < -90) {
+       communicationStatus = "lost";
+     } else if (telemetry.communicationLogs.signalStrength < -80) {
+       communicationStatus = "unstable";
+     }
+   }
+
+
   return (
     <>
       <p className="text-2xl font-bold">
         {isLoading ? 'Calculating...' : (riskScoreData ? `${riskScoreData.riskScore}%` : 'N/A')}
       </p>
       <p className="text-sm text-muted-foreground">
-        {isLoading ? 'Please wait...' : (riskScoreData ? riskScoreData.explanation : 'Click button to calculate risk score.')}
+        {isLoading ? 'Please wait...' : (riskScoreData ? riskScoreData.explanation : 'Using latest telemetry data.')}
       </p>
-      <Button onClick={calculateRiskScore} disabled={isLoading}>
-        {isLoading ? 'Calculating...' : 'Calculate Risk'}
+       {/* Button triggers calculation based on the latest telemetry derived state */}
+       <Button onClick={calculateRiskScore} disabled={isLoading || !telemetry}>
+        {isLoading ? 'Calculating...' : 'Calculate Risk Score'}
       </Button>
     </>
   );
@@ -107,7 +125,7 @@ function AlertList() {
   return (
     <div className="p-4 space-y-4">
       {alerts.map((alert, index) => (
-        <Alert key={index} variant="destructive">
+        <Alert key={index} variant="destructive" className="mb-4"> {/* Added margin bottom */}
           <AlertTitle>{alert.title}</AlertTitle>
           <AlertDescription>{alert.description}</AlertDescription>
         </Alert>
@@ -121,6 +139,7 @@ interface AnomalyExplanationProps {
   satelliteId: string;
 }
 
+// Define AnomalyExplanation directly, no need for dynamic import if not causing hydration issues
 const AnomalyExplanation: React.FC<AnomalyExplanationProps> = ({ telemetry, satelliteId }) => {
   const [anomalyExplanation, setAnomalyExplanation] = useState<ExplainAnomalyScoreOutput | null>(null);
   const [isLoadingAnomaly, setIsLoadingAnomaly] = useState(false);
@@ -133,33 +152,38 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = ({ telemetry, sate
 
       if (!telemetry) {
         setError("Telemetry data is not available.");
+        setIsLoadingAnomaly(false); // Stop loading if no telemetry
         return;
       }
 
       // Pass the actual telemetry data object
       const explanation = await explainAnomalyScore({
         satelliteId: satelliteId,
-        telemetryData: telemetry,
+        telemetryData: telemetry, // Pass the live telemetry data
       });
       setAnomalyExplanation(explanation);
     } catch (error: any) {
        console.error("Error fetching anomaly explanation:", error);
-      // More specific error handling if possible
-      if (error instanceof Error) {
-        setError(`An error occurred while fetching anomaly explanation: ${error.message}`);
-      } else {
-        setError("An unexpected error occurred while fetching anomaly explanation.");
-      }
+       const errorMessage = error.message || "Unknown error";
+       setError(`An error occurred while fetching anomaly explanation: ${errorMessage}`);
     } finally {
       setIsLoadingAnomaly(false);
     }
   };
 
+  // No need to trigger fetch on button click if we always want to show it based on telemetry
+  // Triggering inside DialogTrigger's onClick might be better UX
+  // useEffect(() => {
+  //   if (telemetry) {
+  //     fetchAnomalyExplanation(); // Fetch whenever telemetry data is available/updated
+  //   }
+  // }, [telemetry, satelliteId]); // Depend on telemetry and satelliteId
+
   return (
     <Dialog>
       <DialogTrigger asChild>
         <Button onClick={fetchAnomalyExplanation} disabled={isLoadingAnomaly || !telemetry}>
-          {isLoadingAnomaly ? "Loading..." : "Get Anomaly Explanation"}
+         {isLoadingAnomaly ? "Loading Explanation..." : "Get Anomaly Explanation"}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
@@ -182,7 +206,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = ({ telemetry, sate
                 </ul>
               </div>
             ) : (
-               "Click the button again to load explanation."
+               "Click the button to load explanation." // Or "No explanation available yet."
             )}
            </DialogDescription>
         </DialogHeader>
@@ -191,85 +215,115 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = ({ telemetry, sate
   );
 };
 
-
-const DynamicAnomalyExplanation = dynamic(() => Promise.resolve(AnomalyExplanation), { ssr: false });
+// Remove dynamic import if not strictly needed for hydration issues
+// const DynamicAnomalyExplanation = dynamic(() => import('@/app/page').then(mod => mod.AnomalyExplanation), { ssr: false });
 
 
 interface HomeContentProps {
-  batteryLevel: number;
-  temperature: number;
-  communicationStatus: "stable" | "unstable" | "lost";
-  handleBatteryLevelChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleTemperatureChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleCommunicationStatusChange: (value: "stable" | "unstable" | "lost") => void;
-  riskScoreData: GetRiskScoreOutput | null;
   telemetry: TelemetryData | null;
   error: string | null;
-  calculateRiskScore: () => Promise<void>;
   satelliteId: string;
-  isLoadingRiskScore: boolean;
+  riskScoreData: GetRiskScoreOutput | null; // Pass risk score data down
+  calculateRiskScore: () => Promise<void>; // Pass calculate function
+  isLoadingRiskScore: boolean; // Pass loading state
 }
 
 const HomeContent: React.FC<HomeContentProps> = ({
-  batteryLevel,
-  temperature,
-  communicationStatus,
-  handleBatteryLevelChange,
-  handleTemperatureChange,
-  handleCommunicationStatusChange,
-  riskScoreData,
   telemetry,
   error,
-  calculateRiskScore,
   satelliteId,
+  riskScoreData,
+  calculateRiskScore,
   isLoadingRiskScore
 }) => {
   const router = useRouter();
   const { setOpenMobile } = useSidebar();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+
+  // Calculate derived states from telemetry for display/input
+  const batteryLevel = telemetry ? Math.round((telemetry.batteryVoltage / 4.2) * 100) : 0;
+  const temperature = telemetry ? telemetry.internalTemperature : 0;
+  let communicationStatus: "stable" | "unstable" | "lost" = "stable";
+   if (telemetry) {
+     if (telemetry.communicationLogs.signalStrength < -90) {
+       communicationStatus = "lost";
+     } else if (telemetry.communicationLogs.signalStrength < -80) {
+       communicationStatus = "unstable";
+     }
+   }
+
+   if (!isClient) {
+     // Render loading state or null during SSR and initial client render
+     return (
+        <div className="flex-1 p-4 space-y-4">
+            <Skeleton className="h-8 w-1/2" />
+            <Separator/>
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                <Skeleton className="h-32"/>
+                <Skeleton className="h-32"/>
+                <Skeleton className="h-32"/>
+                <Skeleton className="h-40"/>
+                <Skeleton className="h-40"/>
+                <Skeleton className="h-40 md:col-span-2 lg:col-span-1"/>
+            </div>
+            <Separator/>
+            <Skeleton className="h-64"/>
+        </div>
+     );
+   }
 
   return (
     <>
+      {/* Sidebar remains the same */}
       <Sidebar className="w-60">
-        <SidebarHeader>
-          <h2 className="font-semibold text-lg">CubeSense</h2>
-        </SidebarHeader>
-        <SidebarSeparator />
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarMenu>
-              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/') }}>
-                <Navigation className="mr-2 h-4 w-4" />
-                <span>Overview</span>
-              </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/telemetry') }}>
-                <Cpu className="mr-2 h-4 w-4" />
-                <span>Telemetry</span>
-              </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/alerts') }}>
-                <AlertTriangle className="mr-2 h-4 w-4" />
-                <span>Alerts</span>
-                <Badge className="ml-auto">3</Badge>
-              </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/communication') }}>
-                <Mail className="mr-2 h-4 w-4" />
-                <span>Communication</span>
-              </SidebarMenuButton>
-            </SidebarMenu>
-          </SidebarGroup>
-        </SidebarContent>
-        <SidebarFooter>
-          <p className="text-xs text-muted-foreground">
-            CubeSense - Satellite Monitoring
-          </p>
-        </SidebarFooter>
-      </Sidebar>
+         <SidebarHeader>
+           <h2 className="font-semibold text-lg">CubeSense</h2>
+         </SidebarHeader>
+         <SidebarSeparator />
+         <SidebarContent>
+           <SidebarGroup>
+             <SidebarMenu>
+               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/') }}>
+                 <Navigation className="mr-2 h-4 w-4" />
+                 <span>Overview</span>
+               </SidebarMenuButton>
+               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/telemetry') }}>
+                 <Cpu className="mr-2 h-4 w-4" />
+                 <span>Telemetry</span>
+               </SidebarMenuButton>
+               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/alerts') }}>
+                 <AlertTriangle className="mr-2 h-4 w-4" />
+                 <span>Alerts</span>
+                 <Badge className="ml-auto">3</Badge> {/* Example badge */}
+               </SidebarMenuButton>
+               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/communication') }}>
+                 <Mail className="mr-2 h-4 w-4" />
+                 <span>Communication</span>
+               </SidebarMenuButton>
+             </SidebarMenu>
+           </SidebarGroup>
+         </SidebarContent>
+         <SidebarFooter>
+           <p className="text-xs text-muted-foreground">
+             CubeSense - Satellite Monitoring
+           </p>
+         </SidebarFooter>
+       </Sidebar>
+
+      {/* Main Content Area */}
       <div className="flex-1 p-4">
          <div className="flex items-center space-x-4">
            <SidebarTrigger className="block md:hidden" />
            <h1 className="font-semibold text-2xl">
              Satellite Telemetry Dashboard ({satelliteId})
            </h1>
-           <DynamicAnomalyExplanation telemetry={telemetry} satelliteId={satelliteId} />
+            {/* Pass telemetry to AnomalyExplanation */}
+            <AnomalyExplanation telemetry={telemetry} satelliteId={satelliteId} />
          </div>
 
          {error && (
@@ -280,48 +334,47 @@ const HomeContent: React.FC<HomeContentProps> = ({
            </Alert>
           )}
 
-
          <Separator className="my-4" />
 
-         {/* Input/Control Cards */}
-         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4">
+         {/* Input/Control Cards - Make read-only as they reflect real-time data */}
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4">
            <Card>
              <CardHeader>
-               <CardTitle>Battery Level Input</CardTitle>
+               <CardTitle>Battery Level</CardTitle>
              </CardHeader>
              <CardContent>
                <div className="flex items-center space-x-2">
                  <Label htmlFor="battery-level">Level (%):</Label>
-                 <Input
+                  {/* Display calculated battery level, make input read-only */}
+                  <Input
                    type="number"
                    id="battery-level"
-                   value={batteryLevel}
-                   onChange={handleBatteryLevelChange}
+                   value={telemetry ? batteryLevel : ''} // Show live value
+                   readOnly // Make read-only
                    className="w-20"
-                   min="0"
-                   max="100"
                  />
                </div>
-               <p className="text-xs text-muted-foreground mt-1">Adjust simulated battery level.</p>
+               <p className="text-xs text-muted-foreground mt-1">Current battery level.</p>
              </CardContent>
            </Card>
 
            <Card>
              <CardHeader>
-               <CardTitle>Temperature Input</CardTitle>
+               <CardTitle>Temperature</CardTitle>
              </CardHeader>
              <CardContent>
                <div className="flex items-center space-x-2">
                  <Label htmlFor="temperature">Temp (°C):</Label>
-                 <Input
+                  {/* Display live temperature, make input read-only */}
+                  <Input
                    type="number"
                    id="temperature"
-                   value={temperature}
-                   onChange={handleTemperatureChange}
+                   value={telemetry ? temperature: ''} // Show live value
+                   readOnly // Make read-only
                    className="w-20"
                  />
                </div>
-               <p className="text-xs text-muted-foreground mt-1">Adjust simulated temperature.</p>
+               <p className="text-xs text-muted-foreground mt-1">Current internal temperature.</p>
              </CardContent>
            </Card>
 
@@ -332,7 +385,8 @@ const HomeContent: React.FC<HomeContentProps> = ({
              <CardContent>
                <div className="flex items-center space-x-2">
                  <Label htmlFor="communication-status">Status:</Label>
-                 <Select value={communicationStatus} onValueChange={handleCommunicationStatusChange}>
+                  {/* Display live status, disable select */}
+                  <Select value={telemetry ? communicationStatus : 'stable'} disabled>
                    <SelectTrigger className="w-[180px]">
                      <SelectValue placeholder="Select Status" />
                    </SelectTrigger>
@@ -343,10 +397,11 @@ const HomeContent: React.FC<HomeContentProps> = ({
                    </SelectContent>
                  </Select>
                </div>
-                <p className="text-xs text-muted-foreground mt-1">Adjust simulated comm status.</p>
+                <p className="text-xs text-muted-foreground mt-1">Current communication status.</p>
              </CardContent>
            </Card>
          </div>
+
 
           {/* Display Cards */}
          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
@@ -355,35 +410,36 @@ const HomeContent: React.FC<HomeContentProps> = ({
                <CardTitle>Current Telemetry</CardTitle>
              </CardHeader>
              <CardContent>
+                {/* Use Skeleton while telemetry is null initially */}
                {telemetry ? (
                  <div className="space-y-2">
                    <div className="flex items-center space-x-2">
                      <Battery className="h-4 w-4" />
-                     <span>Battery Voltage: {telemetry?.batteryVoltage}V</span>
+                     <span>Battery Voltage: {telemetry.batteryVoltage?.toFixed(2)}V</span>
                    </div>
                    <div className="flex items-center space-x-2">
                      <Waves className="h-4 w-4" />
-                     <span>Solar Panel Output: {telemetry?.solarPanelOutput}W</span>
+                     <span>Solar Panel Output: {telemetry.solarPanelOutput?.toFixed(2)}W</span>
                    </div>
                    <div className="flex items-center space-x-2">
                      <Thermometer className="h-4 w-4" />
-                     <span>Internal Temp: {telemetry?.internalTemperature}°C</span>
+                     <span>Internal Temp: {telemetry.internalTemperature?.toFixed(1)}°C</span>
                    </div>
                    <div className="flex items-center space-x-2">
                      <Thermometer className="h-4 w-4 text-blue-500" />
-                     <span>External Temp: {telemetry?.externalTemperature}°C</span>
+                     <span>External Temp: {telemetry.externalTemperature?.toFixed(1)}°C</span>
                    </div>
                     <div className="flex items-center space-x-2">
                      <Navigation className="h-4 w-4" />
-                     <span>Gyro: ({telemetry.gyroscope.x.toFixed(2)}, {telemetry.gyroscope.y.toFixed(2)}, {telemetry.gyroscope.z.toFixed(2)})</span>
+                     <span>Gyro: ({telemetry.gyroscope?.x?.toFixed(2)}, {telemetry.gyroscope?.y?.toFixed(2)}, {telemetry.gyroscope?.z?.toFixed(2)})</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Mail className="h-4 w-4"/>
-                       <span>Signal: {telemetry.communicationLogs.signalStrength} dBm, Delay: {telemetry.communicationLogs.packetDelay} ms</span>
+                       <span>Signal: {telemetry.communicationLogs?.signalStrength} dBm, Delay: {telemetry.communicationLogs?.packetDelay} ms</span>
                     </div>
                  </div>
                ) : (
-                 <Skeleton className="h-40 w-full" /> // Adjusted height
+                 <Skeleton className="h-40 w-full" />
                )}
              </CardContent>
            </Card>
@@ -393,24 +449,25 @@ const HomeContent: React.FC<HomeContentProps> = ({
                <CardTitle>Anomaly Risk Score</CardTitle>
              </CardHeader>
              <CardContent>
-               <RiskScoreDisplay riskScoreData={riskScoreData} calculateRiskScore={calculateRiskScore} isLoading={isLoadingRiskScore} />
+                {/* Pass live telemetry to RiskScoreDisplay */}
+                <RiskScoreDisplay
+                 riskScoreData={riskScoreData}
+                 calculateRiskScore={calculateRiskScore}
+                 isLoading={isLoadingRiskScore}
+                 telemetry={telemetry}
+               />
              </CardContent>
            </Card>
 
-           <Card className="col-span-1 md:col-span-2 lg:col-span-1"> {/* Chart takes less space */}
+           <Card className="col-span-1 md:col-span-2 lg:col-span-1"> {/* Chart */}
              <CardHeader>
                <CardTitle>Telemetry Data Stream (Example)</CardTitle>
              </CardHeader>
              <CardContent>
                <ResponsiveContainer width="100%" height={200}>
                  <AreaChart
-                   data={data} // Using static data for now
-                   margin={{
-                     top: 10,
-                     right: 30,
-                     left: 0,
-                     bottom: 0,
-                   }}
+                   data={chartData} // Replace with real-time data array if implemented
+                   margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
                  >
                    <CartesianGrid strokeDasharray="3 3" />
                    <XAxis dataKey="name" />
@@ -418,7 +475,7 @@ const HomeContent: React.FC<HomeContentProps> = ({
                    <Tooltip />
                    <Area
                      type="monotone"
-                     dataKey="pv" // Example data key
+                     dataKey="pv" // Update dataKey based on actual data
                      stroke="hsl(var(--primary))"
                      fill="hsl(var(--primary))"
                      fillOpacity={0.3}
@@ -447,21 +504,54 @@ const HomeContent: React.FC<HomeContentProps> = ({
 
 
 export default function Home() {
-  const [isClient, setIsClient] = useState(false);
-  const [batteryLevel, setBatteryLevel] = useState<number>(50);
-  const [temperature, setTemperature] = useState<number>(25);
-  const [communicationStatus, setCommunicationStatus] = useState<"stable" | "unstable" | "lost">("stable");
-  const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
+  // Remove local state for battery, temp, comm status
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
+  const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingRiskScore, setIsLoadingRiskScore] = useState(false);
+  const [isClient, setIsClient] = useState(false); // State to track client-side mount
 
   const satelliteId = "cubesat-001"; // Example satellite ID
 
+  // Subscribe to telemetry data on component mount
+  useEffect(() => {
+     setIsClient(true); // Component has mounted
+    console.log("Setting up telemetry subscription for:", satelliteId);
+    const unsubscribe = subscribeToTelemetryData(satelliteId, (data) => {
+       console.log("Received telemetry data:", data);
+      setTelemetry(data);
+      setError(null); // Clear error on new data
+       if (data === null) {
+          setError(`Could not fetch telemetry for ${satelliteId}. Check Firestore document.`);
+       }
+    });
+
+    // Clean up subscription on component unmount
+    return () => {
+      console.log("Unsubscribing from telemetry for:", satelliteId);
+      unsubscribe();
+    };
+  }, [satelliteId]); // Re-subscribe if satelliteId changes
+
+  // Calculate risk score based on the latest telemetry state
   const calculateRiskScore = useCallback(async () => {
+    if (!telemetry) {
+      setError("Cannot calculate risk score without telemetry data.");
+      return;
+    }
     setIsLoadingRiskScore(true);
     try {
       setError(null);
+       // Derive inputs from the latest telemetry state
+      const batteryLevel = Math.round((telemetry.batteryVoltage / 4.2) * 100);
+      const temperature = telemetry.internalTemperature;
+      let communicationStatus: "stable" | "unstable" | "lost" = "stable";
+       if (telemetry.communicationLogs.signalStrength < -90) {
+         communicationStatus = "lost";
+       } else if (telemetry.communicationLogs.signalStrength < -80) {
+         communicationStatus = "unstable";
+       }
+
       const riskScore = await getRiskScore({
         batteryLevel,
         temperature,
@@ -474,65 +564,26 @@ export default function Home() {
     } finally {
        setIsLoadingRiskScore(false);
     }
-  }, [batteryLevel, temperature, communicationStatus]); // Dependencies for the callback
+  }, [telemetry]); // Depend on telemetry state
 
-  const fetchTelemetry = useCallback(async () => {
-    try {
-      setError(null);
-      const telemetryData = await getTelemetryData(satelliteId);
-      setTelemetry(telemetryData);
-      // Optionally, update input states based on fetched telemetry
-      // setBatteryLevel(initialBatteryLevelFromTelemetry);
-      // setTemperature(initialTemperatureFromTelemetry);
-      // setCommunicationStatus(initialCommStatusFromTelemetry);
-    } catch (error: any) {
-       console.error("Error fetching telemetry data:", error);
-      setError("An error occurred while fetching telemetry data: " + (error.message || "Unknown error"));
-    }
-  }, [satelliteId]);
+  // Remove handlers for manual input changes
+  // const handleBatteryLevelChange = ...
+  // const handleTemperatureChange = ...
+  // const handleCommunicationStatusChange = ...
 
-  useEffect(() => {
-    setIsClient(true); // Indicate that the component has mounted on the client
-    fetchTelemetry(); // Initial telemetry fetch
-     // Set up interval for fetching telemetry data every 10 seconds (example)
-    const intervalId = setInterval(fetchTelemetry, 10000); // 10000 ms = 10 seconds
-
-    // Clean up interval on component unmount
-    return () => clearInterval(intervalId);
-  }, [fetchTelemetry]); // Re-run effect if fetchTelemetry changes (due to satelliteId change)
-
-
-  const handleBatteryLevelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setBatteryLevel(Number(e.target.value));
-  };
-
-  const handleTemperatureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTemperature(Number(e.target.value));
-  };
-
-  const handleCommunicationStatusChange = (value: "stable" | "unstable" | "lost") => {
-    setCommunicationStatus(value);
-  };
-
-
-  // Render null or a loading state on the server to avoid hydration mismatch
-  if (!isClient) {
-    return null; // Or a basic loading skeleton
-  }
+   // Render HomeContent only on the client after mount
+   if (!isClient) {
+     return null; // Or return a loading skeleton for SSR
+   }
 
   return (
+    // Pass state and functions down to HomeContent
     <HomeContent
-      batteryLevel={batteryLevel}
-      temperature={temperature}
-      communicationStatus={communicationStatus}
-      handleBatteryLevelChange={handleBatteryLevelChange}
-      handleTemperatureChange={handleTemperatureChange}
-      handleCommunicationStatusChange={handleCommunicationStatusChange}
-      riskScoreData={riskScoreData}
       telemetry={telemetry}
       error={error}
-      calculateRiskScore={calculateRiskScore}
       satelliteId={satelliteId}
+      riskScoreData={riskScoreData}
+      calculateRiskScore={calculateRiskScore}
       isLoadingRiskScore={isLoadingRiskScore}
     />
   );
