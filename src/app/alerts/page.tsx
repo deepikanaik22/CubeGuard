@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -26,16 +25,12 @@ interface AlertInfo {
 }
 
 // Function to generate alerts based on telemetry data
-const generateAlerts = (telemetry: TelemetryData | null): AlertInfo[] => {
+const generateAlerts = (telemetry: TelemetryData): AlertInfo[] => {
   const currentAlerts: AlertInfo[] = [];
   const now = new Date();
 
-  if (!telemetry) {
-    return currentAlerts; // No data, no alerts
-  }
-
-  // Example Alert Logic (Replace with your actual thresholds and logic)
-  if (telemetry.internalTemperature > 35) { // Threshold: 35°C
+  // Temperature Alert
+  if (telemetry.internalTemperature > 35) {
     currentAlerts.push({
       id: 'high-temp',
       title: 'High Temperature Alert',
@@ -43,52 +38,82 @@ const generateAlerts = (telemetry: TelemetryData | null): AlertInfo[] => {
       variant: 'destructive',
       timestamp: now,
     });
-  }
-
-  if (telemetry.batteryVoltage < 3.7) { // Threshold: 3.7V
-    currentAlerts.push({
-      id: 'low-battery',
-      title: 'Low Battery Voltage',
-      description: `Battery voltage (${telemetry.batteryVoltage.toFixed(2)}V) is below the critical level (3.7V).`,
-      variant: 'destructive',
+  } else if (telemetry.internalTemperature > 30) { // Warning
+     currentAlerts.push({
+      id: 'warn-temp',
+      title: 'Temperature Warning',
+      description: `Internal temperature (${telemetry.internalTemperature.toFixed(1)}°C) is elevated (Threshold: 30°C).`,
+      variant: 'default',
       timestamp: now,
     });
   }
 
-   if (telemetry.communicationLogs?.signalStrength < -90) { // Threshold: -90 dBm
+  // Battery Voltage Alert
+  if (telemetry.batteryVoltage < 3.7) {
+    currentAlerts.push({
+      id: 'low-battery',
+      title: 'Low Battery Voltage',
+      description: `Battery voltage (${telemetry.batteryVoltage.toFixed(2)}V) is below critical level (3.7V).`,
+      variant: 'destructive',
+      timestamp: now,
+    });
+  } else if (telemetry.batteryVoltage < 3.8) { // Warning
+     currentAlerts.push({
+      id: 'warn-battery',
+      title: 'Battery Voltage Warning',
+      description: `Battery voltage (${telemetry.batteryVoltage.toFixed(2)}V) is low (Threshold: 3.8V).`,
+      variant: 'default',
+      timestamp: now,
+    });
+  }
+
+   // Communication Signal Strength Alert
+   if (telemetry.communicationLogs?.signalStrength < -90) {
      currentAlerts.push({
        id: 'comm-issue-signal',
        title: 'Communication Issue',
-       description: `Signal strength (${telemetry.communicationLogs.signalStrength} dBm) is very weak.`,
+       description: `Signal strength (${telemetry.communicationLogs.signalStrength} dBm) is very weak (Threshold: -90 dBm).`,
        variant: 'destructive',
        timestamp: now,
      });
-   } else if (telemetry.communicationLogs?.signalStrength < -85) { // Warning threshold
+   } else if (telemetry.communicationLogs?.signalStrength < -85) { // Warning
       currentAlerts.push({
        id: 'comm-warning-signal',
        title: 'Communication Warning',
-       description: `Signal strength (${telemetry.communicationLogs.signalStrength} dBm) is weak.`,
+       description: `Signal strength (${telemetry.communicationLogs.signalStrength} dBm) is weak (Threshold: -85 dBm).`,
        variant: 'default', // Use default variant for warnings
        timestamp: now,
      });
    }
 
-   if (telemetry.communicationLogs?.packetDelay > 250) { // Threshold: 250 ms
+   // Communication Packet Delay Alert
+   if (telemetry.communicationLogs?.packetDelay > 250) {
      currentAlerts.push({
        id: 'comm-issue-delay',
        title: 'High Packet Delay',
-       description: `Packet delay (${telemetry.communicationLogs.packetDelay} ms) is high.`,
+       description: `Packet delay (${telemetry.communicationLogs.packetDelay} ms) is high (Threshold: 250 ms).`,
        variant: 'destructive',
+       timestamp: now,
+     });
+   } else if (telemetry.communicationLogs?.packetDelay > 200) { // Warning
+      currentAlerts.push({
+       id: 'comm-warning-delay',
+       title: 'Packet Delay Warning',
+       description: `Packet delay (${telemetry.communicationLogs.packetDelay} ms) is elevated (Threshold: 200 ms).`,
+       variant: 'default',
        timestamp: now,
      });
    }
 
-  // --- Add more alert conditions based on other telemetry data ---
-  // e.g., gyroscope drift, solar panel output low, etc.
+   // Add more alert conditions based on other telemetry data
+   // e.g., Gyroscope drift, Solar panel output low, External temp limits
 
-
-   // Sort alerts by timestamp (newest first) or severity
-   currentAlerts.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+   // Sort alerts: destructive first, then by timestamp (newest first)
+   currentAlerts.sort((a, b) => {
+      if (a.variant === 'destructive' && b.variant !== 'destructive') return -1;
+      if (a.variant !== 'destructive' && b.variant === 'destructive') return 1;
+      return b.timestamp.getTime() - a.timestamp.getTime();
+   });
 
 
   return currentAlerts;
@@ -102,24 +127,37 @@ export default function AlertsPage() {
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
   const [alerts, setAlerts] = useState<AlertInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // Start in loading state
   const [isClient, setIsClient] = useState(false); // State to track client-side mount
 
 
    useEffect(() => {
     setIsClient(true); // Component has mounted
+
     console.log("Setting up telemetry subscription for alerts page:", satelliteId);
+    setIsLoading(true);
+    setError(null);
+
     const unsubscribe = subscribeToTelemetryData(satelliteId, (data) => {
       console.log("Received telemetry data on alerts page:", data);
-      setTelemetry(data);
+      setTelemetry(data); // Store the raw telemetry
       if (data) {
         const generated = generateAlerts(data);
          console.log("Generated alerts:", generated);
         setAlerts(generated); // Update alerts based on new data
+        setError(null);
       } else {
         setAlerts([]); // Clear alerts if no data
-        setError(`Could not fetch telemetry for ${satelliteId}. Check Firestore document.`);
+        console.warn(`No telemetry data found for ${satelliteId} on alerts page.`);
+        // Don't set an error here, just show "No data" message
       }
-       if(data === null) setError(null); // Clear error if data comes back
+      setIsLoading(false); // Stop loading once data (or null) is received
+    }, (subError) => { // Handle subscription errors
+        console.error("Telemetry subscription error on alerts page:", subError);
+        setError(`Failed to subscribe to telemetry for ${satelliteId}.`);
+        setIsLoading(false);
+        setTelemetry(null);
+        setAlerts([]);
     });
 
     // Clean up subscription on component unmount
@@ -129,13 +167,18 @@ export default function AlertsPage() {
     };
   }, [satelliteId]);
 
-    if (!isClient) {
-     // Render loading state or null during SSR and initial client render
+  const destructiveAlertCount = alerts.filter(a => a.variant === 'destructive').length;
+
+  // Render skeleton during SSR or initial client render before mount
+  if (!isClient) {
      return (
-        <div className="flex-1 p-4 space-y-4">
-            <Skeleton className="h-8 w-1/4" />
-            <Separator/>
-            <Skeleton className="h-64"/>
+        <div className="flex min-h-screen">
+             <Skeleton className="w-60 hidden md:block" /> {/* Sidebar Placeholder */}
+            <div className="flex-1 p-4 space-y-4">
+                <Skeleton className="h-8 w-1/4" />
+                <Separator/>
+                <Skeleton className="h-64"/>
+            </div>
         </div>
      );
    }
@@ -164,9 +207,9 @@ export default function AlertsPage() {
                  <AlertTriangle className="mr-2 h-4 w-4" />
                  <span>Alerts</span>
                  {/* Display dynamic alert count */}
-                 {alerts.filter(a => a.variant === 'destructive').length > 0 && (
+                 {destructiveAlertCount > 0 && (
                      <Badge variant="destructive" className="ml-auto">
-                         {alerts.filter(a => a.variant === 'destructive').length}
+                         {destructiveAlertCount}
                      </Badge>
                  )}
                </SidebarMenuButton>
@@ -191,39 +234,47 @@ export default function AlertsPage() {
           <h1 className="font-semibold text-2xl">Alerts ({satelliteId})</h1>
         </div>
 
-         {error && !telemetry && ( // Show error only if telemetry is also null
-           <Alert variant="destructive" className="my-4">
-             <AlertTriangle className="h-4 w-4" />
-             <AlertTitle>Error</AlertTitle>
-             <AlertDescription>{error}</AlertDescription>
-           </Alert>
+         {/* Show loading or error state */}
+          {isLoading ? (
+            <div className="mt-4 space-y-4">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+            </div>
+          ) : error ? (
+            <Alert variant="destructive" className="my-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : (
+            <>
+              <Separator className="my-4" />
+              <div>
+                <h2 className="font-semibold text-xl mb-2">Current Alerts</h2>
+                <ScrollArea className="h-[calc(100vh-200px)] w-full rounded-md border"> {/* Adjust height as needed */}
+                  <div className="p-4 space-y-4">
+                    {alerts.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-4">No active alerts.</p>
+                    ) : (
+                      alerts.map((alert) => (
+                        <Alert key={alert.id} variant={alert.variant} className="mb-4"> {/* Use dynamic variant */}
+                          <AlertTriangle className="h-4 w-4"/>
+                          <AlertTitle>{alert.title}</AlertTitle>
+                          <AlertDescription>
+                             {alert.description}
+                             <span className="block text-xs text-muted-foreground mt-1">
+                               {alert.timestamp.toLocaleString()}
+                             </span>
+                           </AlertDescription>
+                        </Alert>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </>
           )}
-
-        <Separator className="my-4" />
-
-        <div>
-          <h2 className="font-semibold text-xl mb-2">Current Alerts</h2>
-           {/* Use Skeleton while loading initial data */}
-           {!telemetry && !error ? (
-               <Skeleton className="h-[400px] w-full rounded-md border" />
-            ) : (
-              <ScrollArea className="h-[400px] w-full rounded-md border">
-                <div className="p-4 space-y-4"> {/* Added space-y-4 for spacing */}
-                  {alerts.length === 0 && !error && (
-                    <p className="text-muted-foreground p-4">No active alerts.</p>
-                  )}
-                  {alerts.map((alert) => (
-                    <Alert key={alert.id} variant={alert.variant} className="mb-4"> {/* Use dynamic variant */}
-                      <AlertTriangle className="h-4 w-4"/>
-                      <AlertTitle>{alert.title}</AlertTitle>
-                      <AlertDescription>{alert.description}</AlertDescription>
-                    </Alert>
-                  ))}
-                </div>
-              </ScrollArea>
-            )
-           }
-        </div>
       </div>
     </>
   );
