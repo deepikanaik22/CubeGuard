@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +17,7 @@ import React, { useState, useEffect } from 'react';
 import { subscribeToTelemetryData, TelemetryData } from '@/services/telemetry'; // Import subscription
 import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
 import { formatDistanceToNow } from 'date-fns'; // For formatting last contact time
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import Alert components
 
 
 export default function CommunicationPage() {
@@ -96,7 +98,7 @@ export default function CommunicationPage() {
                <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/alerts') }}>
                  <AlertTriangle className="mr-2 h-4 w-4" />
                  <span>Alerts</span>
-                 <Badge className="ml-auto">3</Badge> {/* Example badge */}
+                 {/* <Badge className="ml-auto">3</Badge> */} {/* Remove static badge */}
                </SidebarMenuButton>
                <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/communication') }}>
                  <Mail className="mr-2 h-4 w-4" />
@@ -187,4 +189,5 @@ export default function CommunicationPage() {
     </>
   );
 }
+
 
