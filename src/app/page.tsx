@@ -1,5 +1,5 @@
 'use client';
-
+import dynamic from 'next/dynamic';
 import {
   Sidebar,
   SidebarContent,
@@ -10,7 +10,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarSeparator,
-  SidebarProvider,
+  useSidebar
 } from "@/components/ui/sidebar";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {
@@ -22,7 +22,7 @@ import {
   AlertTriangle,
   Cpu,
 } from "lucide-react";
-import {getTelemetryData} from "@/services/telemetry";
+import {getTelemetryData, TelemetryData} from "@/services/telemetry";
 import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
 import {Badge} from "@/components/ui/badge";
 import {
@@ -52,9 +52,9 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/c
 import {Label} from "@/components/ui/label";
 import {Input} from "@/components/ui/input";
 import {getRiskScore, GetRiskScoreOutput} from "@/ai/flows/get-risk-score";
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {useRouter} from 'next/navigation';
-import { useSidebar } from "@/components/ui/sidebar";
+
 
 const data = [
   {name: "00:00", uv: 400, pv: 2400, amt: 2400},
@@ -69,18 +69,21 @@ const data = [
 interface RiskScoreDisplayProps {
   riskScoreData: GetRiskScoreOutput | null;
   calculateRiskScore: () => void;
+  isLoading: boolean;
 }
 
-const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = ({riskScoreData, calculateRiskScore}) => {
+const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = ({riskScoreData, calculateRiskScore, isLoading}) => {
   return (
     <>
       <p className="text-2xl font-bold">
-        {riskScoreData ? `${riskScoreData.riskScore}%` : 'N/A'}
+        {isLoading ? 'Calculating...' : (riskScoreData ? `${riskScoreData.riskScore}%` : 'N/A')}
       </p>
       <p className="text-sm text-muted-foreground">
-        {riskScoreData ? riskScoreData.explanation : 'No risk score calculated.'}
+        {isLoading ? 'Please wait...' : (riskScoreData ? riskScoreData.explanation : 'Click button to calculate risk score.')}
       </p>
-      <Button onClick={calculateRiskScore}>Calculate Risk</Button>
+      <Button onClick={calculateRiskScore} disabled={isLoading}>
+        {isLoading ? 'Calculating...' : 'Calculate Risk'}
+      </Button>
     </>
   );
 };
@@ -102,7 +105,7 @@ function AlertList() {
   ];
 
   return (
-    <div className="p-4">
+    <div className="p-4 space-y-4">
       {alerts.map((alert, index) => (
         <Alert key={index} variant="destructive">
           <AlertTitle>{alert.title}</AlertTitle>
@@ -114,7 +117,7 @@ function AlertList() {
 }
 
 interface AnomalyExplanationProps {
-  telemetry: any;
+  telemetry: TelemetryData | null;
   satelliteId: string;
 }
 
@@ -133,14 +136,20 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = ({ telemetry, sate
         return;
       }
 
+      // Pass the actual telemetry data object
       const explanation = await explainAnomalyScore({
         satelliteId: satelliteId,
         telemetryData: telemetry,
       });
       setAnomalyExplanation(explanation);
     } catch (error: any) {
-      setError("An error occurred while fetching anomaly explanation.");
-      console.error("Error fetching anomaly explanation:", error);
+       console.error("Error fetching anomaly explanation:", error);
+      // More specific error handling if possible
+      if (error instanceof Error) {
+        setError(`An error occurred while fetching anomaly explanation: ${error.message}`);
+      } else {
+        setError("An unexpected error occurred while fetching anomaly explanation.");
+      }
     } finally {
       setIsLoadingAnomaly(false);
     }
@@ -149,20 +158,33 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = ({ telemetry, sate
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button onClick={fetchAnomalyExplanation} disabled={isLoadingAnomaly}>
+        <Button onClick={fetchAnomalyExplanation} disabled={isLoadingAnomaly || !telemetry}>
           {isLoadingAnomaly ? "Loading..." : "Get Anomaly Explanation"}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Anomaly Explanation</DialogTitle>
-          {isLoadingAnomaly ? (
-            <DialogDescription>Loading explanation...</DialogDescription>
-          ) : error ? (
-            <DialogDescription>{error}</DialogDescription>
-          ) : (
-            <DialogDescription>{anomalyExplanation?.explanation || "No explanation available."}</DialogDescription>
-          )}
+          <DialogTitle>Anomaly Explanation for {satelliteId}</DialogTitle>
+           <DialogDescription>
+            {isLoadingAnomaly ? (
+              <Skeleton className="h-20 w-full" />
+            ) : error ? (
+              <span className="text-destructive">{error}</span>
+            ) : anomalyExplanation ? (
+              <div>
+                <p>{anomalyExplanation.explanation}</p>
+                <h4 className="font-semibold mt-4">Risk Breakdown:</h4>
+                <ul>
+                  <li>Thermal: {anomalyExplanation.breakdown.thermal}%</li>
+                  <li>Communication: {anomalyExplanation.breakdown.comm}%</li>
+                  <li>Power: {anomalyExplanation.breakdown.power}%</li>
+                  <li>Orientation: {anomalyExplanation.breakdown.orientation}%</li>
+                </ul>
+              </div>
+            ) : (
+               "Click the button again to load explanation."
+            )}
+           </DialogDescription>
         </DialogHeader>
       </DialogContent>
     </Dialog>
@@ -170,64 +192,46 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = ({ telemetry, sate
 };
 
 
-export default function Home() {
+const DynamicAnomalyExplanation = dynamic(() => Promise.resolve(AnomalyExplanation), { ssr: false });
+
+
+interface HomeContentProps {
+  batteryLevel: number;
+  temperature: number;
+  communicationStatus: "stable" | "unstable" | "lost";
+  handleBatteryLevelChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleTemperatureChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleCommunicationStatusChange: (value: "stable" | "unstable" | "lost") => void;
+  riskScoreData: GetRiskScoreOutput | null;
+  telemetry: TelemetryData | null;
+  error: string | null;
+  calculateRiskScore: () => Promise<void>;
+  satelliteId: string;
+  isLoadingRiskScore: boolean;
+}
+
+const HomeContent: React.FC<HomeContentProps> = ({
+  batteryLevel,
+  temperature,
+  communicationStatus,
+  handleBatteryLevelChange,
+  handleTemperatureChange,
+  handleCommunicationStatusChange,
+  riskScoreData,
+  telemetry,
+  error,
+  calculateRiskScore,
+  satelliteId,
+  isLoadingRiskScore
+}) => {
   const router = useRouter();
-  const satelliteId = "cubesat-001";
   const { setOpenMobile } = useSidebar();
 
-  const [batteryLevel, setBatteryLevel] = useState<number>(50);
-  const [temperature, setTemperature] = useState<number>(25);
-  const [communicationStatus, setCommunicationStatus] = useState<"stable" | "unstable" | "lost">("stable");
-  const [telemetry, setTelemetry] = useState<any>(null);
-  const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const telemetryData = await getTelemetryData(satelliteId);
-        setTelemetry(telemetryData);
-      } catch (err) {
-        console.error("Failed to fetch telemetry data", err);
-        setError("Failed to fetch telemetry data.");
-      }
-    };
-
-    fetchData();
-  }, [satelliteId]);
-
-  const calculateRiskScore = async () => {
-    try {
-      const riskData = await getRiskScore({
-        batteryLevel: Number(batteryLevel),
-        temperature: Number(temperature),
-        communicationStatus: communicationStatus,
-      });
-      setRiskScoreData(riskData);
-    } catch (error) {
-      console.error("Error calculating risk score:", error);
-      setError("Failed to calculate risk score");
-    }
-  };
-
-  const handleBatteryLevelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setBatteryLevel(Number(e.target.value));
-  };
-
-  const handleTemperatureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTemperature(Number(e.target.value));
-  };
-
-  const handleCommunicationStatusChange = (value: "stable" | "unstable" | "lost") => {
-    setCommunicationStatus(value);
-  };
-
   return (
-    <SidebarProvider>
+    <>
       <Sidebar className="w-60">
         <SidebarHeader>
-          <h2 className="font-semibold text-lg">CubeGuard</h2>
+          <h2 className="font-semibold text-lg">CubeSense</h2>
         </SidebarHeader>
         <SidebarSeparator />
         <SidebarContent>
@@ -255,154 +259,281 @@ export default function Home() {
         </SidebarContent>
         <SidebarFooter>
           <p className="text-xs text-muted-foreground">
-            CubeGuard - Satellite Monitoring
+            CubeSense - Satellite Monitoring
           </p>
         </SidebarFooter>
       </Sidebar>
       <div className="flex-1 p-4">
-        <div className="flex items-center space-x-4">
-          <SidebarTrigger className="block md:hidden" />
-          <h1 className="font-semibold text-2xl">
-            Satellite Telemetry Dashboard
-          </h1>
-          <AnomalyExplanation telemetry={telemetry} satelliteId={satelliteId} />
-        </div>
+         <div className="flex items-center space-x-4">
+           <SidebarTrigger className="block md:hidden" />
+           <h1 className="font-semibold text-2xl">
+             Satellite Telemetry Dashboard ({satelliteId})
+           </h1>
+           <DynamicAnomalyExplanation telemetry={telemetry} satelliteId={satelliteId} />
+         </div>
 
-        <Separator className="my-4" />
+         {error && (
+           <Alert variant="destructive" className="my-4">
+             <AlertTriangle className="h-4 w-4" />
+             <AlertTitle>Error</AlertTitle>
+             <AlertDescription>{error}</AlertDescription>
+           </Alert>
+          )}
 
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>Battery Level</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="battery-level">Level (%):</Label>
-                <Input
-                  type="number"
-                  id="battery-level"
-                  value={batteryLevel}
-                  onChange={handleBatteryLevelChange}
-                  className="w-20"
-                />
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Temperature</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="temperature">Temp (°C):</Label>
-                <Input
-                  type="number"
-                  id="temperature"
-                  value={temperature}
-                  onChange={handleTemperatureChange}
-                  className="w-20"
-                />
-              </div>
-            </CardContent>
-          </Card>
+         <Separator className="my-4" />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Communication Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="communication-status">Status:</Label>
-                <Select value={communicationStatus} onValueChange={handleCommunicationStatusChange}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder={communicationStatus} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="stable">Stable</SelectItem>
-                    <SelectItem value="unstable">Unstable</SelectItem>
-                    <SelectItem value="lost">Lost</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+         {/* Input/Control Cards */}
+         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4">
+           <Card>
+             <CardHeader>
+               <CardTitle>Battery Level Input</CardTitle>
+             </CardHeader>
+             <CardContent>
+               <div className="flex items-center space-x-2">
+                 <Label htmlFor="battery-level">Level (%):</Label>
+                 <Input
+                   type="number"
+                   id="battery-level"
+                   value={batteryLevel}
+                   onChange={handleBatteryLevelChange}
+                   className="w-20"
+                   min="0"
+                   max="100"
+                 />
+               </div>
+               <p className="text-xs text-muted-foreground mt-1">Adjust simulated battery level.</p>
+             </CardContent>
+           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Telemetry Data</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {telemetry ? (
-                <>
-                  <div className="flex items-center space-x-2">
-                    <Battery className="h-4 w-4" />
-                    <span>Battery Voltage: {telemetry?.batteryVoltage}V</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Waves className="h-4 w-4" />
-                    <span>Solar Panel Output: {telemetry?.solarPanelOutput}W</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Thermometer className="h-4 w-4" />
-                    <span>Internal Temperature: {telemetry?.internalTemperature}°C</span>
-                  </div>
-                </>
-              ) : (
-                <Skeleton className="h-24 w-full" />
-              )}
-            </CardContent>
-          </Card>
+           <Card>
+             <CardHeader>
+               <CardTitle>Temperature Input</CardTitle>
+             </CardHeader>
+             <CardContent>
+               <div className="flex items-center space-x-2">
+                 <Label htmlFor="temperature">Temp (°C):</Label>
+                 <Input
+                   type="number"
+                   id="temperature"
+                   value={temperature}
+                   onChange={handleTemperatureChange}
+                   className="w-20"
+                 />
+               </div>
+               <p className="text-xs text-muted-foreground mt-1">Adjust simulated temperature.</p>
+             </CardContent>
+           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Risk Score</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <RiskScoreDisplay riskScoreData={riskScoreData} calculateRiskScore={calculateRiskScore} />
-            </CardContent>
-          </Card>
+           <Card>
+             <CardHeader>
+               <CardTitle>Communication Status</CardTitle>
+             </CardHeader>
+             <CardContent>
+               <div className="flex items-center space-x-2">
+                 <Label htmlFor="communication-status">Status:</Label>
+                 <Select value={communicationStatus} onValueChange={handleCommunicationStatusChange}>
+                   <SelectTrigger className="w-[180px]">
+                     <SelectValue placeholder="Select Status" />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="stable">Stable</SelectItem>
+                     <SelectItem value="unstable">Unstable</SelectItem>
+                     <SelectItem value="lost">Lost</SelectItem>
+                   </SelectContent>
+                 </Select>
+               </div>
+                <p className="text-xs text-muted-foreground mt-1">Adjust simulated comm status.</p>
+             </CardContent>
+           </Card>
+         </div>
 
-          <Card className="col-span-2">
-            <CardHeader>
-              <CardTitle>Telemetry Data Stream</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart
-                  data={data}
-                  margin={{
-                    top: 10,
-                    right: 30,
-                    left: 0,
-                    bottom: 0,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Area
-                    type="monotone"
-                    dataKey="pv"
-                    stroke="#8884d8"
-                    fill="#8884d8"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
+          {/* Display Cards */}
+         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+           <Card>
+             <CardHeader>
+               <CardTitle>Current Telemetry</CardTitle>
+             </CardHeader>
+             <CardContent>
+               {telemetry ? (
+                 <div className="space-y-2">
+                   <div className="flex items-center space-x-2">
+                     <Battery className="h-4 w-4" />
+                     <span>Battery Voltage: {telemetry?.batteryVoltage}V</span>
+                   </div>
+                   <div className="flex items-center space-x-2">
+                     <Waves className="h-4 w-4" />
+                     <span>Solar Panel Output: {telemetry?.solarPanelOutput}W</span>
+                   </div>
+                   <div className="flex items-center space-x-2">
+                     <Thermometer className="h-4 w-4" />
+                     <span>Internal Temp: {telemetry?.internalTemperature}°C</span>
+                   </div>
+                   <div className="flex items-center space-x-2">
+                     <Thermometer className="h-4 w-4 text-blue-500" />
+                     <span>External Temp: {telemetry?.externalTemperature}°C</span>
+                   </div>
+                    <div className="flex items-center space-x-2">
+                     <Navigation className="h-4 w-4" />
+                     <span>Gyro: ({telemetry.gyroscope.x.toFixed(2)}, {telemetry.gyroscope.y.toFixed(2)}, {telemetry.gyroscope.z.toFixed(2)})</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Mail className="h-4 w-4"/>
+                       <span>Signal: {telemetry.communicationLogs.signalStrength} dBm, Delay: {telemetry.communicationLogs.packetDelay} ms</span>
+                    </div>
+                 </div>
+               ) : (
+                 <Skeleton className="h-40 w-full" /> // Adjusted height
+               )}
+             </CardContent>
+           </Card>
 
-        <Separator className="my-4" />
+           <Card>
+             <CardHeader>
+               <CardTitle>Anomaly Risk Score</CardTitle>
+             </CardHeader>
+             <CardContent>
+               <RiskScoreDisplay riskScoreData={riskScoreData} calculateRiskScore={calculateRiskScore} isLoading={isLoadingRiskScore} />
+             </CardContent>
+           </Card>
 
-        <div>
-          <h2 className="font-semibold text-xl mb-2">Alerts</h2>
-          <ScrollArea className="h-[300px] w-full rounded-md border">
-            <AlertList />
-          </ScrollArea>
-        </div>
-      </div>
-    </SidebarProvider>
+           <Card className="col-span-1 md:col-span-2 lg:col-span-1"> {/* Chart takes less space */}
+             <CardHeader>
+               <CardTitle>Telemetry Data Stream (Example)</CardTitle>
+             </CardHeader>
+             <CardContent>
+               <ResponsiveContainer width="100%" height={200}>
+                 <AreaChart
+                   data={data} // Using static data for now
+                   margin={{
+                     top: 10,
+                     right: 30,
+                     left: 0,
+                     bottom: 0,
+                   }}
+                 >
+                   <CartesianGrid strokeDasharray="3 3" />
+                   <XAxis dataKey="name" />
+                   <YAxis />
+                   <Tooltip />
+                   <Area
+                     type="monotone"
+                     dataKey="pv" // Example data key
+                     stroke="hsl(var(--primary))"
+                     fill="hsl(var(--primary))"
+                     fillOpacity={0.3}
+                   />
+                 </AreaChart>
+               </ResponsiveContainer>
+               <p className="text-xs text-muted-foreground mt-2">Example chart using static data.</p>
+             </CardContent>
+           </Card>
+         </div>
+
+
+         <Separator className="my-4" />
+
+         {/* Alerts Section */}
+         <div>
+           <h2 className="font-semibold text-xl mb-2">Alerts</h2>
+           <ScrollArea className="h-[300px] w-full rounded-md border">
+             <AlertList />
+           </ScrollArea>
+         </div>
+       </div>
+    </>
+  );
+};
+
+
+export default function Home() {
+  const [isClient, setIsClient] = useState(false);
+  const [batteryLevel, setBatteryLevel] = useState<number>(50);
+  const [temperature, setTemperature] = useState<number>(25);
+  const [communicationStatus, setCommunicationStatus] = useState<"stable" | "unstable" | "lost">("stable");
+  const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
+  const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoadingRiskScore, setIsLoadingRiskScore] = useState(false);
+
+  const satelliteId = "cubesat-001"; // Example satellite ID
+
+  const calculateRiskScore = useCallback(async () => {
+    setIsLoadingRiskScore(true);
+    try {
+      setError(null);
+      const riskScore = await getRiskScore({
+        batteryLevel,
+        temperature,
+        communicationStatus,
+      });
+      setRiskScoreData(riskScore);
+    } catch (error: any) {
+      console.error("Error calculating risk score:", error);
+      setError("An error occurred while calculating risk score: " + (error.message || "Unknown error"));
+    } finally {
+       setIsLoadingRiskScore(false);
+    }
+  }, [batteryLevel, temperature, communicationStatus]); // Dependencies for the callback
+
+  const fetchTelemetry = useCallback(async () => {
+    try {
+      setError(null);
+      const telemetryData = await getTelemetryData(satelliteId);
+      setTelemetry(telemetryData);
+      // Optionally, update input states based on fetched telemetry
+      // setBatteryLevel(initialBatteryLevelFromTelemetry);
+      // setTemperature(initialTemperatureFromTelemetry);
+      // setCommunicationStatus(initialCommStatusFromTelemetry);
+    } catch (error: any) {
+       console.error("Error fetching telemetry data:", error);
+      setError("An error occurred while fetching telemetry data: " + (error.message || "Unknown error"));
+    }
+  }, [satelliteId]);
+
+  useEffect(() => {
+    setIsClient(true); // Indicate that the component has mounted on the client
+    fetchTelemetry(); // Initial telemetry fetch
+     // Set up interval for fetching telemetry data every 10 seconds (example)
+    const intervalId = setInterval(fetchTelemetry, 10000); // 10000 ms = 10 seconds
+
+    // Clean up interval on component unmount
+    return () => clearInterval(intervalId);
+  }, [fetchTelemetry]); // Re-run effect if fetchTelemetry changes (due to satelliteId change)
+
+
+  const handleBatteryLevelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setBatteryLevel(Number(e.target.value));
+  };
+
+  const handleTemperatureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTemperature(Number(e.target.value));
+  };
+
+  const handleCommunicationStatusChange = (value: "stable" | "unstable" | "lost") => {
+    setCommunicationStatus(value);
+  };
+
+
+  // Render null or a loading state on the server to avoid hydration mismatch
+  if (!isClient) {
+    return null; // Or a basic loading skeleton
+  }
+
+  return (
+    <HomeContent
+      batteryLevel={batteryLevel}
+      temperature={temperature}
+      communicationStatus={communicationStatus}
+      handleBatteryLevelChange={handleBatteryLevelChange}
+      handleTemperatureChange={handleTemperatureChange}
+      handleCommunicationStatusChange={handleCommunicationStatusChange}
+      riskScoreData={riskScoreData}
+      telemetry={telemetry}
+      error={error}
+      calculateRiskScore={calculateRiskScore}
+      satelliteId={satelliteId}
+      isLoadingRiskScore={isLoadingRiskScore}
+    />
   );
 }

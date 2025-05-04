@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'CubeGuard',
+  title: 'CubeSense', // Updated App Name
   description: 'Satellite Anomaly Detection Dashboard',
 };
 
@@ -26,11 +26,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      <SidebarProvider>
-        {children}
-      </SidebarProvider>
+        {/* Wrap the entire application content with SidebarProvider */}
+        <SidebarProvider>
+          {children}
+        </SidebarProvider>
       </body>
     </html>
   );
 }
-
