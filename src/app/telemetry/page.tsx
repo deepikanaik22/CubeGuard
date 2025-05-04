@@ -16,72 +16,64 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-// Import subscribeToTelemetryData
 import { subscribeToTelemetryData, TelemetryData } from "@/services/telemetry";
 import React, { useState, useEffect } from 'react';
-import { Sidebar, SidebarTrigger, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarSeparator, useSidebar } from "@/components/ui/sidebar";
-import { useRouter } from 'next/navigation';
-// No need for Badge here unless showing alert count
-// import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // For showing errors
-
+import { useSatellite } from '@/context/SatelliteContext'; // Import useSatellite
 
 export default function TelemetryPage() {
-  const router = useRouter();
-  const satelliteId = "cubesat-001"; // Example satellite ID
+  const { selectedSatelliteId } = useSatellite(); // Get selected satellite ID
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Start loading
-  const { setOpenMobile } = useSidebar();
-  const [isClient, setIsClient] = useState(false); // State to track client-side mount
-
+  const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true); // Component has mounted
+  }, []);
 
-    console.log("Setting up telemetry subscription for detailed telemetry:", satelliteId);
+  useEffect(() => {
+    if (!selectedSatelliteId || !isClient) return; // Don't subscribe if no satellite or not mounted
+
+    console.log("Setting up telemetry subscription for detailed telemetry:", selectedSatelliteId);
     setIsLoading(true);
     setError(null);
+    setTelemetry(null); // Clear previous data
 
-    const unsubscribe = subscribeToTelemetryData(satelliteId, (data) => {
+    const unsubscribe = subscribeToTelemetryData(selectedSatelliteId, (data) => {
       console.log("Received telemetry data on telemetry page:", data);
       setTelemetry(data);
-      setError(null); // Clear error on new data
+      setError(null);
       if (data === null) {
-         console.warn(`No telemetry data found for ${satelliteId} on telemetry page.`);
-         // Don't set error, handle in UI
+         console.warn(`No telemetry data found for ${selectedSatelliteId} on telemetry page.`);
       }
-      setIsLoading(false); // Stop loading
-    }, (subError) => { // Handle subscription errors
+      setIsLoading(false);
+    }, (subError) => {
         console.error("Telemetry subscription error on telemetry page:", subError);
-        setError(`Failed to subscribe to telemetry for ${satelliteId}.`);
+        setError(`Failed to subscribe to telemetry for ${selectedSatelliteId}.`);
         setIsLoading(false);
         setTelemetry(null);
     });
 
-    // Clean up subscription on component unmount
     return () => {
-      console.log("Unsubscribing from telemetry for:", satelliteId);
+      console.log("Unsubscribing from telemetry for:", selectedSatelliteId);
       unsubscribe();
     };
-  }, [satelliteId]);
+  }, [selectedSatelliteId, isClient]); // Re-subscribe when selectedSatelliteId or isClient changes
 
    // Render skeleton during SSR or initial client loading
    if (!isClient || isLoading) {
      return (
-        <div className="flex min-h-screen">
-            <Skeleton className="w-60 hidden md:block" /> {/* Sidebar Placeholder */}
-            <div className="flex-1 p-4 space-y-4">
-                <Skeleton className="h-8 w-1/4" />
-                <Separator/>
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                    {[...Array(8)].map((_, i) => ( // Render 8 skeleton cards
-                        <Card key={i}>
-                            <CardHeader><Skeleton className="h-5 w-1/3" /></CardHeader>
-                            <CardContent><Skeleton className="h-8 w-1/2" /></CardContent>
-                        </Card>
-                    ))}
-                </div>
+        <div className="space-y-4">
+            <Skeleton className="h-8 w-1/4" />
+            <Separator/>
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {[...Array(8)].map((_, i) => ( // Render 8 skeleton cards
+                    <Card key={i}>
+                        <CardHeader><Skeleton className="h-5 w-1/3" /></CardHeader>
+                        <CardContent><Skeleton className="h-8 w-1/2" /></CardContent>
+                    </Card>
+                ))}
             </div>
         </div>
      );
@@ -89,47 +81,9 @@ export default function TelemetryPage() {
 
   return (
     <>
-      {/* Sidebar remains the same */}
-      <Sidebar className="w-60">
-         <SidebarHeader>
-           <h2 className="font-semibold text-lg">CubeSense</h2>
-         </SidebarHeader>
-         <SidebarSeparator />
-         <SidebarContent>
-           <SidebarGroup>
-             <SidebarMenu>
-               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/') }}>
-                 <Navigation className="mr-2 h-4 w-4" />
-                 <span>Overview</span>
-               </SidebarMenuButton>
-               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/telemetry') }}>
-                 <Cpu className="mr-2 h-4 w-4" />
-                 <span>Telemetry</span>
-               </SidebarMenuButton>
-               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/alerts') }}>
-                 <AlertTriangle className="mr-2 h-4 w-4" />
-                 <span>Alerts</span>
-               </SidebarMenuButton>
-               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/communication') }}>
-                 <Mail className="mr-2 h-4 w-4" />
-                 <span>Communication</span>
-               </SidebarMenuButton>
-             </SidebarMenu>
-           </SidebarGroup>
-         </SidebarContent>
-         <SidebarFooter>
-           <p className="text-xs text-muted-foreground">
-             CubeSense - Satellite Monitoring
-           </p>
-         </SidebarFooter>
-       </Sidebar>
-
-      {/* Main Content */}
-      <div className="flex-1 p-4">
-        <div className="flex items-center space-x-4">
-          <SidebarTrigger className="block md:hidden" />
-          <h1 className="font-semibold text-2xl">Detailed Telemetry ({satelliteId})</h1>
-        </div>
+      {/* Sidebar is now in layout.tsx */}
+      <div className="flex-1"> {/* Removed p-4, handled by layout */}
+        <h1 className="font-semibold text-2xl mb-4">Detailed Telemetry ({selectedSatelliteId})</h1>
 
         {error && (
            <Alert variant="destructive" className="my-4">
@@ -143,12 +97,9 @@ export default function TelemetryPage() {
               <Alert variant="default" className="my-4">
                  <Cpu className="h-4 w-4" />
                  <AlertTitle>Waiting for Data</AlertTitle>
-                 <AlertDescription>No telemetry data received yet for {satelliteId}. Ensure data is being sent.</AlertDescription>
+                 <AlertDescription>No telemetry data received yet for {selectedSatelliteId}. Ensure data is being sent.</AlertDescription>
              </Alert>
          )}
-
-
-        <Separator className="my-4" />
 
         {/* Display all telemetry data points in cards */}
         {telemetry && (

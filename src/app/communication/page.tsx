@@ -2,73 +2,70 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Sidebar, SidebarTrigger, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarSeparator, useSidebar } from '@/components/ui/sidebar';
 import {
-  Navigation,
-  AlertTriangle,
-  Cpu,
   Mail,
   SignalHigh, // Better icon for Signal Strength
   Clock, // Icon for Last Contact
   Timer, // Icon for Packet Delay
+  AlertTriangle, // For errors
 } from "lucide-react";
-// No need for Badge here unless showing alert count
-// import { Badge } from "@/components/ui/badge";
-import { useRouter } from 'next/navigation';
 import React, { useState, useEffect } from 'react';
 import { subscribeToTelemetryData, TelemetryData } from '@/services/telemetry'; // Import subscription
 import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
 import { formatDistanceToNowStrict } from 'date-fns'; // Use strict for cleaner output
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Import Alert components
-
+import { useSatellite } from '@/context/SatelliteContext'; // Import useSatellite
 
 export default function CommunicationPage() {
-  const router = useRouter();
-  const { setOpenMobile } = useSidebar();
-  const satelliteId = "cubesat-001"; // Example satellite ID
+  const { selectedSatelliteId } = useSatellite(); // Get selected satellite ID
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Start loading
-  const [isClient, setIsClient] = useState(false); // State to track client-side mount
+  const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true); // Component has mounted
+  }, []);
 
-    console.log("Setting up telemetry subscription for communication page:", satelliteId);
+  useEffect(() => {
+     if (!selectedSatelliteId || !isClient) return; // Don't subscribe if no satellite or not mounted
+
+    console.log("Setting up telemetry subscription for communication page:", selectedSatelliteId);
     setIsLoading(true);
     setError(null);
+    setTelemetry(null); // Clear previous data
 
-    const unsubscribe = subscribeToTelemetryData(satelliteId, (data) => {
+    const unsubscribe = subscribeToTelemetryData(selectedSatelliteId, (data) => {
        console.log("Received telemetry data on communication page:", data);
       setTelemetry(data);
       setError(null); // Clear error on new data
       if (data === null) {
-         console.warn(`No telemetry data found for ${satelliteId} on communication page.`);
-         // Don't set error, just handle the lack of data in UI
+         console.warn(`No telemetry data found for ${selectedSatelliteId} on communication page.`);
       }
       setIsLoading(false); // Stop loading
     }, (subError) => { // Handle subscription errors
         console.error("Telemetry subscription error on communication page:", subError);
-        setError(`Failed to subscribe to telemetry for ${satelliteId}.`);
+        setError(`Failed to subscribe to telemetry for ${selectedSatelliteId}.`);
         setIsLoading(false);
         setTelemetry(null);
     });
 
     // Clean up subscription on component unmount
     return () => {
-      console.log("Unsubscribing from telemetry for communication page:", satelliteId);
+      console.log("Unsubscribing from telemetry for communication page:", selectedSatelliteId);
       unsubscribe();
     };
-  }, [satelliteId]);
+  }, [selectedSatelliteId, isClient]); // Re-subscribe when satellite ID or mount status changes
 
    // Format last contact time from Firestore timestamp
    const getLastContactTime = () => {
      if (!telemetry?.timestamp) return 'N/A';
      try {
-        // Convert Firestore Timestamp to JS Date if necessary
-        // If telemetry.timestamp is already a Date object, this is fine.
-        // If it's a Firestore Timestamp, use .toDate()
-        const lastContactDate = telemetry.timestamp.toDate ? telemetry.timestamp.toDate() : telemetry.timestamp;
+        // Convert Firestore Timestamp or JS Date to JS Date
+        const lastContactDate = telemetry.timestamp instanceof Date
+          ? telemetry.timestamp
+          : telemetry.timestamp?.toDate?.(); // Handle potential Firestore Timestamp
+
         if (!(lastContactDate instanceof Date) || isNaN(lastContactDate.getTime())) {
              return 'Invalid date';
         }
@@ -108,74 +105,24 @@ export default function CommunicationPage() {
     // Render skeleton during SSR or initial client loading
     if (!isClient || isLoading) {
      return (
-        <div className="flex min-h-screen">
-             <Skeleton className="w-60 hidden md:block" /> {/* Sidebar Placeholder */}
-             <div className="flex-1 p-4 space-y-4">
-                <Skeleton className="h-8 w-1/3" />
-                <Separator/>
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                    <Card>
-                      <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
-                      <CardContent><Skeleton className="h-10 w-3/4" /></CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
-                      <CardContent><Skeleton className="h-10 w-3/4" /></CardContent>
-                    </Card>
-                     <Card>
-                      <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
-                      <CardContent><Skeleton className="h-10 w-3/4" /></CardContent>
-                    </Card>
-                </div>
-            </div>
-        </div>
+        <div className="space-y-4">
+             <Skeleton className="h-8 w-1/3" />
+             <Separator/>
+             <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                 <Card><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-10 w-3/4" /></CardContent></Card>
+                 <Card><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-10 w-3/4" /></CardContent></Card>
+                 <Card><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent><Skeleton className="h-10 w-3/4" /></CardContent></Card>
+             </div>
+         </div>
      );
    }
 
 
   return (
     <>
-      {/* Sidebar remains the same */}
-      <Sidebar className="w-60">
-         <SidebarHeader>
-           <h2 className="font-semibold text-lg">CubeSense</h2>
-         </SidebarHeader>
-         <SidebarSeparator />
-         <SidebarContent>
-           <SidebarGroup>
-             <SidebarMenu>
-               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/') }}>
-                 <Navigation className="mr-2 h-4 w-4" />
-                 <span>Overview</span>
-               </SidebarMenuButton>
-               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/telemetry') }}>
-                 <Cpu className="mr-2 h-4 w-4" />
-                 <span>Telemetry</span>
-               </SidebarMenuButton>
-               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/alerts') }}>
-                 <AlertTriangle className="mr-2 h-4 w-4" />
-                 <span>Alerts</span>
-               </SidebarMenuButton>
-               <SidebarMenuButton onClick={() => { setOpenMobile(false); router.push('/communication') }}>
-                 <Mail className="mr-2 h-4 w-4" />
-                 <span>Communication</span>
-               </SidebarMenuButton>
-             </SidebarMenu>
-           </SidebarGroup>
-         </SidebarContent>
-         <SidebarFooter>
-           <p className="text-xs text-muted-foreground">
-             CubeSense - Satellite Monitoring
-           </p>
-         </SidebarFooter>
-       </Sidebar>
-
-      {/* Main Content */}
-      <div className="flex-1 p-4">
-        <div className="flex items-center space-x-4">
-          <SidebarTrigger className="block md:hidden" />
-          <h1 className="font-semibold text-2xl">Communication Status ({satelliteId})</h1>
-        </div>
+      {/* Sidebar is now in layout.tsx */}
+      <div className="flex-1"> {/* Removed p-4, handled by layout */}
+        <h1 className="font-semibold text-2xl mb-4">Communication Status ({selectedSatelliteId})</h1>
 
          {error && (
            <Alert variant="destructive" className="my-4">
@@ -189,55 +136,55 @@ export default function CommunicationPage() {
               <Alert variant="default" className="my-4">
                  <Mail className="h-4 w-4" />
                  <AlertTitle>Waiting for Data</AlertTitle>
-                 <AlertDescription>No communication data received yet for {satelliteId}. Ensure data is being sent.</AlertDescription>
+                 <AlertDescription>No communication data received yet for {selectedSatelliteId}. Ensure data is being sent.</AlertDescription>
              </Alert>
          )}
 
-        <Separator className="my-4" />
-
         {/* Display Communication Data from Real-time Telemetry */}
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-               <CardTitle className="text-sm font-medium">Signal Strength</CardTitle>
-               <SignalHigh className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">
-                  {telemetry?.communicationLogs?.signalStrength != null ? `${telemetry.communicationLogs.signalStrength} dBm` : 'N/A'}
-                </div>
-                <p className={`text-xs ${statusInfo.color}`}>
-                    {statusInfo.text}
-                </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Packet Delay</CardTitle>
-              <Timer className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
+        {telemetry && (
+         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+           <Card>
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Signal Strength</CardTitle>
+                <SignalHigh className="h-4 w-4 text-muted-foreground" />
+             </CardHeader>
+             <CardContent>
                  <div className="text-2xl font-bold">
-                   {telemetry?.communicationLogs?.packetDelay != null ? `${telemetry.communicationLogs.packetDelay} ms` : 'N/A'}
-                  </div>
-                 <p className={`text-xs ${delayInfo.color}`}>
-                     {delayInfo.text}
+                   {telemetry.communicationLogs?.signalStrength != null ? `${telemetry.communicationLogs.signalStrength} dBm` : 'N/A'}
+                 </div>
+                 <p className={`text-xs ${statusInfo.color}`}>
+                     {statusInfo.text}
                  </p>
-            </CardContent>
-          </Card>
+             </CardContent>
+           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Last Contact</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                 <div className="text-2xl font-bold">{getLastContactTime()}</div>
-                 <p className="text-xs text-muted-foreground">Time since last telemetry update.</p>
-            </CardContent>
-          </Card>
-        </div>
+           <Card>
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+               <CardTitle className="text-sm font-medium">Packet Delay</CardTitle>
+               <Timer className="h-4 w-4 text-muted-foreground" />
+             </CardHeader>
+             <CardContent>
+                  <div className="text-2xl font-bold">
+                    {telemetry.communicationLogs?.packetDelay != null ? `${telemetry.communicationLogs.packetDelay} ms` : 'N/A'}
+                   </div>
+                  <p className={`text-xs ${delayInfo.color}`}>
+                      {delayInfo.text}
+                  </p>
+             </CardContent>
+           </Card>
+
+           <Card>
+             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+               <CardTitle className="text-sm font-medium">Last Contact</CardTitle>
+               <Clock className="h-4 w-4 text-muted-foreground" />
+             </CardHeader>
+             <CardContent>
+                  <div className="text-2xl font-bold">{getLastContactTime()}</div>
+                  <p className="text-xs text-muted-foreground">Time since last telemetry update.</p>
+             </CardContent>
+           </Card>
+         </div>
+         )}
 
         {/* Optionally add a chart for signal strength/delay over time */}
         {/* <Separator className="my-6" />
