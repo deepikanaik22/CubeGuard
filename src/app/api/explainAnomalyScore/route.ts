@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     // Log the full error object with stack trace if available
     console.error('/api/explainAnomalyScore - Internal Server Error:', error);
 
-    let errorMessage = 'An unknown error occurred';
+    let errorMessage = 'An unexpected error occurred';
     let statusCode = 500; // Default to 500 Internal Server Error
 
     if (error instanceof Error) {
@@ -28,6 +28,13 @@ export async function POST(req: NextRequest) {
         } else if (errorMessage.includes("Tool did not return telemetry data")) {
             statusCode = 404; // Or potentially 500 if the tool *should* always return data
             errorMessage = `Error: Could not retrieve necessary data. ${errorMessage}`;
+        } else if (errorMessage.includes("AI explanation response")) {
+             // Specific error from flow's validation or output check
+             statusCode = 502; // Bad Gateway - issue with upstream AI response
+             errorMessage = `AI Error: ${errorMessage}`;
+        } else if (errorMessage.includes("Failed to retrieve telemetry via tool")) {
+            statusCode = 504; // Gateway Timeout or Bad Gateway depending on context
+            errorMessage = `Error: ${errorMessage}`;
         }
          // Add more specific status codes based on error types if needed
     } else if (typeof error === 'string') {
@@ -42,3 +49,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+    
