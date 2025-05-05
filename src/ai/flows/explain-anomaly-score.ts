@@ -3,38 +3,17 @@
  * @fileOverview Explains the anomaly score for a given satellite based on telemetry data.
  *
  * - explainAnomalyScore - A function that explains the anomaly score.
- * - ExplainAnomalyScoreInput - The input type for the explainAnomalyScore function.
- * - ExplainAnomalyScoreOutput - The return type for the explainAnomalyScore function.
  */
 
 import {ai} from '@/ai/ai-instance';
 import {TelemetryData, getTelemetryData} from '@/services/telemetry';
 import {z} from 'genkit';
+import type { ExplainAnomalyScoreInput, ExplainAnomalyScoreOutput } from '@/ai/types'; // Import types
 
+// Define schemas locally for runtime validation
 const ExplainAnomalyScoreInputSchema = z.object({
   satelliteId: z.string().describe('The ID of the satellite to explain the anomaly score for.'),
-  telemetryData: z.object({
-    gyroscope: z.object({
-      x: z.number(),
-      y: z.number(),
-      z: z.number(),
-    }),
-    batteryVoltage: z.number(),
-    solarPanelOutput: z.number(),
-    internalTemperature: z.number(),
-    externalTemperature: z.number(),
-    magnetometer: z.object({
-      x: z.number(),
-      y: z.number(),
-      z: z.number(),
-    }),
-    communicationLogs: z.object({
-      signalStrength: z.number(),
-      packetDelay: z.number(),
-    }),
-  }).describe('The telemetry data for the satellite.').optional(),
 });
-export type ExplainAnomalyScoreInput = z.infer<typeof ExplainAnomalyScoreInputSchema>;
 
 const ExplainAnomalyScoreOutputSchema = z.object({
   explanation: z.string().describe('A detailed explanation of how the Anomaly Risk Score was calculated.'),
@@ -45,51 +24,74 @@ const ExplainAnomalyScoreOutputSchema = z.object({
     orientation: z.number().describe('The contribution of orientation factors to the risk score (0-100).'),
   }).describe('A breakdown of the risk score by failure type.'),
 });
-export type ExplainAnomalyScoreOutput = z.infer<typeof ExplainAnomalyScoreOutputSchema>;
 
-export const explainAnomalyScore = async (input: ExplainAnomalyScoreInput): Promise<ExplainAnomalyScoreOutput> =>
-  explainAnomalyScoreFlow(input);
+// Define a tool for getting telemetry data
+const getTelemetryDataTool = ai.defineTool(
+  {
+    name: 'getTelemetryData',
+    description: 'Retrieves the latest telemetry data for a specific satellite.',
+    inputSchema: z.object({
+      satelliteId: z.string().describe('The ID of the satellite.'),
+    }),
+    outputSchema: z.object({
+      gyroscope: z.object({ x: z.number(), y: z.number(), z: z.number() }),
+      batteryVoltage: z.number(),
+      solarPanelOutput: z.number(),
+      internalTemperature: z.number(),
+      externalTemperature: z.number(),
+      magnetometer: z.object({ x: z.number(), y: z.number(), z: z.number() }),
+      communicationLogs: z.object({ signalStrength: z.number(), packetDelay: z.number() }),
+      timestamp: z.date().optional(), // Assuming timestamp is a Date object
+    }),
+  },
+  async (input) => {
+    const data = await getTelemetryData(input.satelliteId);
+    if (!data) {
+      throw new Error(`Telemetry data not found for satellite ${input.satelliteId}`);
+    }
+    // Ensure timestamp is handled correctly if needed by the schema (optional here)
+    return data;
+  }
+);
+
+
+export async function explainAnomalyScore(input: ExplainAnomalyScoreInput): Promise<ExplainAnomalyScoreOutput> {
+  try {
+    // Call the Genkit flow directly
+    const result = await explainAnomalyScoreFlow(input);
+    return result;
+  } catch (error) {
+     console.error("Error in explainAnomalyScore function:", error);
+     // Rethrow or handle the error appropriately for the UI
+     // Example: Return a structured error object
+     // return { error: "Failed to get anomaly explanation." };
+     throw error; // Rethrowing for now, adjust as needed
+  }
+}
+
 
 const prompt = ai.definePrompt<
-  { telemetryData: TelemetryData, satelliteId: string },
-  ExplainAnomalyScoreOutput
+  { telemetryData: TelemetryData, satelliteId: string }, // Input type for the prompt function
+  typeof ExplainAnomalyScoreOutputSchema // Output schema for the prompt
 >({
   name: 'explainAnomalyScorePrompt',
-  input: {
+  input: { // Define input schema for the prompt context
     schema: z.object({
-      satelliteId: z.string().describe('The ID of the satellite to explain the anomaly score for.'),
+      satelliteId: z.string(),
       telemetryData: z.object({
-        gyroscope: z.object({
-          x: z.number(),
-          y: z.number(),
-          z: z.number(),
-        }),
+        gyroscope: z.object({ x: z.number(), y: z.number(), z: z.number() }),
         batteryVoltage: z.number(),
         solarPanelOutput: z.number(),
         internalTemperature: z.number(),
         externalTemperature: z.number(),
-        magnetometer: z.object({
-          x: z.number(),
-          y: z.number(),
-          z: z.number(),
-        }),
-        communicationLogs: z.object({
-          signalStrength: z.number(),
-          packetDelay: z.number(),
-        }),
-      }).describe('The telemetry data for the satellite.'),
+        magnetometer: z.object({ x: z.number(), y: z.number(), z: z.number() }),
+        communicationLogs: z.object({ signalStrength: z.number(), packetDelay: z.number() }),
+        timestamp: z.date().optional(),
+      }),
     }),
   },
-  output: {
-    schema: z.object({
-      explanation: z.string().describe('A detailed explanation of how the Anomaly Risk Score was calculated.'),
-      breakdown: z.object({
-        thermal: z.number().describe('The contribution of thermal factors to the risk score (0-100).'),
-        comm: z.number().describe('The contribution of communication factors to the risk score (0-100).'),
-        power: z.number().describe('The contribution of power factors to the risk score (0-100).'),
-        orientation: z.number().describe('The contribution of orientation factors to the risk score (0-100).'),
-      }).describe('A breakdown of the risk score by failure type.'),
-    }),
+  output: { // Define output schema for the prompt
+    schema: ExplainAnomalyScoreOutputSchema,
   },
   prompt: `You are an expert in analyzing CubeSat telemetry data to determine the likelihood of anomalies.
 
@@ -116,22 +118,37 @@ Battery Voltage: {{batteryVoltage}}
 Solar Panel Output: {{solarPanelOutput}}
 Internal Temperature: {{internalTemperature}}
 External Temperature: {{externalTemperature}}
-Magnetometer: x={{magnetometer.x}}, y={{magnetometer.y}}, z={{magnetometer.z}}Communication Logs: Signal Strength={{communicationLogs.signalStrength}}, Packet Delay={{communicationLogs.packetDelay}}{{/with}}`,
+Magnetometer: x={{magnetometer.x}}, y={{magnetometer.y}}, z={{magnetometer.z}}
+Communication Logs: Signal Strength={{communicationLogs.signalStrength}}, Packet Delay={{communicationLogs.packetDelay}}
+{{/with}}`,
 });
 
 const explainAnomalyScoreFlow = ai.defineFlow<
-  ExplainAnomalyScoreInput,
-  ExplainAnomalyScoreOutput
+  typeof ExplainAnomalyScoreInputSchema, // Input schema for the flow
+  typeof ExplainAnomalyScoreOutputSchema // Output schema for the flow
 >({
   name: 'explainAnomalyScoreFlow',
   inputSchema: ExplainAnomalyScoreInputSchema,
   outputSchema: ExplainAnomalyScoreOutputSchema,
-}, async (input) => {
-  const telemetryData = await getTelemetryData(input.satelliteId);
-  const result = await prompt({
-    telemetryData: telemetryData,
-    satelliteId: input.satelliteId,
-  });
+  tools: [getTelemetryDataTool], // Provide the tool to the flow
+}, async (input, context) => {
+   // Use the tool provided by the context
+   const telemetryData = await context.tools.getTelemetryData({satelliteId: input.satelliteId});
+
+   if (!telemetryData) {
+        throw new Error(`Could not retrieve telemetry data for satellite ${input.satelliteId}`);
+    }
+
+   // Pass the retrieved data to the prompt
+   const result = await prompt({
+     telemetryData,
+     satelliteId: input.satelliteId,
+   });
+
+   // Ensure output is not null before returning
+    if (!result.output) {
+        throw new Error("AI failed to generate an explanation output.");
+    }
 
   return result.output;
 });

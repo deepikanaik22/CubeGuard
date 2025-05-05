@@ -10,7 +10,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarSeparator,
-  useSidebar, // Import useSidebar directly
+  useSidebar
 } from "@/components/ui/sidebar";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {
@@ -23,7 +23,7 @@ import {
   Cpu,
   Rocket, // Added Rocket icon
 } from "lucide-react";
-import { subscribeToTelemetryData, TelemetryData, getTelemetryData } from '@/services/telemetry'; // Using simulated source now
+import { getTelemetryData, TelemetryData } from '@/services/telemetry'; // Using simulated source now
 import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
 import {Badge} from "@/components/ui/badge";
 import {
@@ -36,7 +36,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import {ScrollArea} from "@/components/ui/scroll-area";
-import {explainAnomalyScore, ExplainAnomalyScoreOutput} from "@/ai/flows/explain-anomaly-score";
+import {explainAnomalyScore} from "@/ai/flows/explain-anomaly-score";
 import {Skeleton} from "@/components/ui/skeleton";
 import {Button} from "@/components/ui/button";
 import {
@@ -48,14 +48,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {Separator} from "@/components/ui/separator";
-import {getRiskScore, GetRiskScoreOutput} from "@/ai/flows/get-risk-score";
+import {getRiskScore} from "@/ai/flows/get-risk-score";
 import React, {useState, useEffect, useCallback, memo} from 'react';
-import {useRouter, usePathname} from 'next/navigation';
+import {useRouter} from 'next/navigation';
 import { useSatellite } from '@/context/SatelliteContext';
 import SatelliteSelector from '@/components/SatelliteSelector'; // Import SatelliteSelector
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+
+// Import types from the centralized types file
+import type { GetRiskScoreOutput, ExplainAnomalyScoreOutput } from '@/ai/types';
 
 
 // Recharts needs client-side rendering
@@ -118,16 +121,12 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(({ telemetry,
 
    // Function to fetch anomaly explanation using AI
   const fetchAnomalyExplanation = useCallback(async () => {
-    if (!telemetry) {
-      setAnomalyError("Cannot fetch explanation without current telemetry data.");
-      return;
-    }
+    // Note: Telemetry is no longer passed directly, the flow fetches it using the tool
     setIsLoadingAnomaly(true);
     setAnomalyError(null);
     setAnomalyExplanation(null); // Clear previous explanation
 
     try {
-      // Ensure telemetry data is passed if the flow requires it (currently it uses a tool)
       const explanation = await explainAnomalyScore({ satelliteId: satelliteId });
       setAnomalyExplanation(explanation);
     } catch (aiError: any) {
@@ -149,13 +148,13 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(({ telemetry,
     } finally {
       setIsLoadingAnomaly(false);
     }
-  }, [telemetry, satelliteId]);
+  }, [satelliteId]); // Removed telemetry dependency here
 
   return (
     <Dialog>
       <DialogTrigger asChild>
         {/* Ensure button is only interactive on client */}
-        <Button onClick={isClient ? fetchAnomalyExplanation : undefined} disabled={!isClient || !telemetry || isLoadingAnomaly} variant="outline">
+        <Button onClick={isClient ? fetchAnomalyExplanation : undefined} disabled={!isClient || isLoadingAnomaly} variant="outline">
           {isLoadingAnomaly ? 'Loading...' : 'Get Anomaly Explanation'}
         </Button>
       </DialogTrigger>
@@ -208,567 +207,255 @@ AnomalyExplanation.displayName = 'AnomalyExplanation';
 const DynamicAnomalyExplanation = dynamic(() => Promise.resolve(AnomalyExplanation), { ssr: false });
 
 
-// Define alert types
-interface AlertInfo {
-  id: string;
-  title: string;
-  description: string;
-  variant: 'default' | 'destructive';
-  timestamp: Date;
+function HomeInner({
+  batteryLevel,
+  temperature,
+  communicationStatus,
+  setBatteryLevel,
+  setTemperature,
+  setCommunicationStatus,
+  riskScoreData,
+  telemetry,
+  error,
+  calculateRiskScore,
+}: any) {
+  const router = useRouter();
+  const { setOpenMobile } = useSidebar(); // ✅ Now safely used inside SidebarProvider
+
+  return (
+    <>
+      <Sidebar className="w-60">
+          <SidebarHeader>
+             <div className="flex flex-col gap-2 p-4">
+               <div className="flex items-center gap-2">
+                  <Rocket className="h-6 w-6 text-primary" />
+                  <h2 className="font-semibold text-lg">CubeSense</h2>
+                </div>
+                {/* Use SatelliteSelector here */}
+               <SatelliteSelector />
+             </div>
+          </SidebarHeader>
+          <SidebarSeparator />
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarMenu>
+                <SidebarMenuButton onClick={() => router.push('/')} isActive={router.pathname === '/'}>
+                  <Navigation className="mr-2 h-4 w-4" />
+                  <span>Overview</span>
+                </SidebarMenuButton>
+                <SidebarMenuButton onClick={() => router.push('/telemetry')} isActive={router.pathname === '/telemetry'}>
+                  <Cpu className="mr-2 h-4 w-4" />
+                  <span>Telemetry</span>
+                </SidebarMenuButton>
+                <SidebarMenuButton onClick={() => router.push('/alerts')} isActive={router.pathname === '/alerts'}>
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  <span>Alerts</span>
+                   {/* Add badge logic if needed */}
+                </SidebarMenuButton>
+                 <SidebarMenuButton onClick={() => router.push('/communication')} isActive={router.pathname === '/communication'}>
+                  <Mail className="mr-2 h-4 w-4" />
+                  <span>Communication</span>
+                </SidebarMenuButton>
+              </SidebarMenu>
+            </SidebarGroup>
+          </SidebarContent>
+          <SidebarFooter>
+            <p className="text-xs text-muted-foreground p-4">
+              CubeSense Monitoring v1.0
+            </p>
+          </SidebarFooter>
+        </Sidebar>
+      <div className="flex-1 p-4">
+         {/* Header for mobile - Keep this structure */}
+        <header className="sticky top-0 z-10 flex h-[57px] items-center gap-1 border-b bg-background px-4 md:hidden">
+           <SidebarTrigger className="md:hidden"/>
+           <h1 className="text-xl font-semibold ml-2">CubeSense</h1>
+           <div className="ml-auto"><SatelliteSelector /></div>
+        </header>
+
+         {/* Main content */}
+         <div> {/* Main content wrapper */}
+            {/* Desktop Header */}
+             <div className="hidden md:flex flex-wrap items-center justify-between gap-4 mb-4">
+               <div className="flex items-center gap-2">
+                 <h1 className="font-semibold text-2xl">
+                    CubeSense Dashboard ({telemetry?.id || '...'}) {/* Display selected satellite ID */}
+                 </h1>
+               </div>
+               <div className="flex items-center gap-4">
+                   {/* Use SatelliteSelector on Desktop */}
+                   <SatelliteSelector />
+                   {/* Use DynamicAnomalyExplanation */}
+                   <DynamicAnomalyExplanation
+                     telemetry={telemetry} // Pass telemetry if needed by the component internally
+                     satelliteId={telemetry?.id || ""} // Pass satellite ID
+                   />
+               </div>
+             </div>
+             <Separator className="my-4 hidden md:block" />
+
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Simulation Input Area */}
+             <Card className="mb-6">
+                <CardHeader>
+                    <CardTitle>Simulate Telemetry Input</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex items-center space-x-2">
+                        <Label htmlFor="battery-level" className="min-w-[100px]">Battery (%)</Label>
+                        <Input
+                            type="number"
+                            id="battery-level"
+                            value={batteryLevel}
+                            onChange={(e) => setBatteryLevel(Number(e.target.value))}
+                            className="w-20"
+                        />
+                    </div>
+                     <div className="flex items-center space-x-2">
+                        <Label htmlFor="temperature" className="min-w-[100px]">Temperature (°C)</Label>
+                        <Input
+                            type="number"
+                            id="temperature"
+                            value={temperature}
+                            onChange={(e) => setTemperature(Number(e.target.value))}
+                            className="w-20"
+                        />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                         <Label htmlFor="comm-status" className="min-w-[100px]">Comm Status</Label>
+                         <Select value={communicationStatus} onValueChange={(value: "stable" | "unstable" | "lost") => setCommunicationStatus(value)}>
+                             <SelectTrigger className="w-[180px]">
+                                 <SelectValue placeholder="Select status" />
+                             </SelectTrigger>
+                             <SelectContent>
+                                 <SelectItem value="stable">Stable</SelectItem>
+                                 <SelectItem value="unstable">Unstable</SelectItem>
+                                 <SelectItem value="lost">Lost</SelectItem>
+                             </SelectContent>
+                         </Select>
+                    </div>
+                </CardContent>
+             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Anomaly Risk Score</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RiskScoreDisplay
+                  riskScoreData={riskScoreData}
+                  isLoading={false} // Adjust based on actual loading state if needed
+                  error={null} // Adjust based on actual error state if needed
+                  calculateRiskScore={calculateRiskScore}
+                />
+              </CardContent>
+            </Card>
+
+             {/* Display Fetched Telemetry Data if available */}
+            {telemetry && (
+                 <Card className="mt-6">
+                     <CardHeader>
+                         <CardTitle>Live Telemetry Data ({telemetry.id})</CardTitle>
+                     </CardHeader>
+                     <CardContent>
+                         <pre className="text-sm bg-muted p-4 rounded-md overflow-x-auto">
+                             {JSON.stringify(telemetry, (key, value) =>
+                                 // Format Date objects nicely
+                                 key === 'timestamp' && value instanceof Date ? value.toISOString() : value,
+                             2)}
+                         </pre>
+                     </CardContent>
+                 </Card>
+             )}
+        </div>
+      </div>
+    </>
+  );
 }
 
-// Generate alerts based on telemetry data
-const generateAlerts = (telemetry: TelemetryData): AlertInfo[] => {
-  const currentAlerts: AlertInfo[] = [];
-  const now = new Date();
-
-  // Temperature Alert (Critical)
-  if (telemetry.internalTemperature > 38) {
-    currentAlerts.push({
-      id: `high-temp-${telemetry.id}-${now.getTime()}`,
-      title: 'Critical Temperature Alert',
-      description: `Internal temp (${telemetry.internalTemperature.toFixed(1)}°C) exceeded critical threshold (38°C). Risk of overheating.`,
-      variant: 'destructive',
-      timestamp: now,
-    });
-  }
-  // Temperature Warning
-  else if (telemetry.internalTemperature > 35) {
-    currentAlerts.push({
-      id: `warn-temp-${telemetry.id}-${now.getTime()}`,
-      title: 'High Temperature Warning',
-      description: `Internal temperature (${telemetry.internalTemperature.toFixed(1)}°C) is high (Threshold: 35°C). Monitor closely.`,
-      variant: 'default', // Use 'default' for warnings
-      timestamp: now,
-    });
-  }
-
-  // Battery Voltage Alert (Critical)
-  if (telemetry.batteryVoltage < 3.65) {
-    currentAlerts.push({
-      id: `low-battery-${telemetry.id}-${now.getTime()}`,
-      title: 'Critical Low Battery',
-      description: `Battery voltage (${telemetry.batteryVoltage.toFixed(2)}V) is critically low (Threshold: 3.65V). Potential power loss imminent.`,
-      variant: 'destructive',
-      timestamp: now,
-    });
-  }
-  // Battery Voltage Warning
-  else if (telemetry.batteryVoltage < 3.75) {
-     currentAlerts.push({
-      id: `warn-battery-${telemetry.id}-${now.getTime()}`,
-      title: 'Low Battery Warning',
-      description: `Battery voltage (${telemetry.batteryVoltage.toFixed(2)}V) is low (Threshold: 3.75V). Check power generation.`,
-      variant: 'default',
-      timestamp: now,
-    });
-  }
-
-  // Communication Signal Strength Alert (Critical)
-  if (telemetry.communicationLogs?.signalStrength < -95) {
-    currentAlerts.push({
-      id: `comm-issue-signal-${telemetry.id}-${now.getTime()}`,
-      title: 'Critical Comm Signal',
-      description: `Signal strength (${telemetry.communicationLogs.signalStrength} dBm) is very weak (Threshold: -95 dBm). Potential loss of contact.`,
-      variant: 'destructive',
-      timestamp: now,
-    });
-  }
-   // Communication Signal Strength Warning
-   else if (telemetry.communicationLogs?.signalStrength < -90) {
-     currentAlerts.push({
-      id: `comm-warn-signal-${telemetry.id}-${now.getTime()}`,
-      title: 'Weak Comm Signal',
-      description: `Signal strength (${telemetry.communicationLogs.signalStrength} dBm) is weak (Threshold: -90 dBm). Investigate link quality.`,
-      variant: 'default',
-      timestamp: now,
-    });
-  }
-
-  // Communication Packet Delay Alert (Critical)
-  if (telemetry.communicationLogs?.packetDelay > 300) {
-    currentAlerts.push({
-      id: `comm-issue-delay-${telemetry.id}-${now.getTime()}`,
-      title: 'Critical Packet Delay',
-      description: `Packet delay (${telemetry.communicationLogs.packetDelay} ms) is critically high (Threshold: 300 ms). Investigate network issues.`,
-      variant: 'destructive',
-      timestamp: now,
-    });
-  }
-   // Communication Packet Delay Warning
-   else if (telemetry.communicationLogs?.packetDelay > 250) {
-    currentAlerts.push({
-      id: `comm-warn-delay-${telemetry.id}-${now.getTime()}`,
-      title: 'High Packet Delay',
-      description: `Packet delay (${telemetry.communicationLogs.packetDelay} ms) is high (Threshold: 250 ms).`,
-      variant: 'default',
-      timestamp: now,
-    });
-  }
-
-  // Sort alerts: destructive first, then by timestamp (newest first)
-  currentAlerts.sort((a, b) => {
-    if (a.variant === 'destructive' && b.variant !== 'destructive') return -1;
-    if (a.variant !== 'destructive' && b.variant === 'destructive') return 1;
-    return b.timestamp.getTime() - a.timestamp.getTime();
-  });
-
-  return currentAlerts;
-};
-
-
-// Memoize HomeContent
-const HomeContent = memo(({
-  telemetry,
-  alerts,
-  telemetryHistory,
-  riskScoreData,
-  isLoadingRiskScore,
-  riskScoreError,
-  isLoadingTelemetry,
-  telemetryError, // Changed prop name
-  selectedSatelliteId,
-  calculateRiskScore // Pass calculateRiskScore down
-}: {
-  telemetry: TelemetryData | null;
-  alerts: AlertInfo[];
-  telemetryHistory: TelemetryData[];
-  riskScoreData: GetRiskScoreOutput | null;
-  isLoadingRiskScore: boolean;
-  riskScoreError: string | null;
-  isLoadingTelemetry: boolean;
-  telemetryError: string | null; // Changed prop name
-  selectedSatelliteId: string;
-  calculateRiskScore: () => void; // Define the prop type
-}) => {
-
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => { setIsClient(true); }, []);
-
-   // Format telemetry history for the chart
-  const formattedChartData = telemetryHistory.map(t => ({
-    name: t.timestamp instanceof Date ? t.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A', // Format timestamp HH:MM:SS
-    voltage: t.batteryVoltage,
-    temp: t.internalTemperature,
-    signal: t.communicationLogs?.signalStrength ?? -120, // Default if null
-  }));
-
-   // Render skeleton during initial client load or when telemetry is loading
-   const renderSkeleton = () => (
-     <div className="space-y-4">
-         <div className="flex items-center justify-between mb-4">
-             <Skeleton className="h-8 w-1/3" />
-             {/* Skeleton for satellite selector and explanation button */}
-             <div className="flex items-center gap-4">
-                 <Skeleton className="h-10 w-40" />
-                 <Skeleton className="h-10 w-44" />
-             </div>
-         </div>
-         <Separator className="mb-4"/>
-         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4">
-             <Skeleton className="h-24"/>
-             <Skeleton className="h-24"/>
-             <Skeleton className="h-24"/>
-         </div>
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4">
-             <Skeleton className="h-44"/> {/* AI card */}
-             <Skeleton className="h-44"/> {/* Telemetry Snapshot */}
-             <Skeleton className="h-44"/> {/* System Status */}
-         </div>
-         <Skeleton className="h-64 mb-4"/> {/* Chart */}
-         <Skeleton className="h-40"/> {/* Alerts */}
-     </div>
-   );
-
-    // Show loading state
-    if (!isClient || (isLoadingTelemetry && telemetryHistory.length === 0)) {
-        return renderSkeleton();
-    }
-
-    // Show error state for telemetry subscription
-    if (telemetryError) { // Use telemetryError
-        return (
-          <Alert variant="destructive" className="my-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Telemetry Subscription Error</AlertTitle>
-            <AlertDescription>{telemetryError}</AlertDescription>
-          </Alert>
-        );
-    }
-
-    // Show message if no data has arrived yet (but subscription is active)
-    if (!telemetry) {
-        return (
-          <Alert variant="default" className="my-4">
-            <Rocket className="h-4 w-4" /> {/* Changed icon */}
-            <AlertTitle>Waiting for Telemetry</AlertTitle>
-            <AlertDescription>Attempting to receive data for {selectedSatelliteId}. Ensure the simulation is running or data source is active.</AlertDescription>
-          </Alert>
-        );
-    }
-
-     // Calculate derived states for display only when telemetry is available
-     const batteryLevel = Math.min(100, Math.max(0, Math.round(((telemetry.batteryVoltage - 3.5) / (4.2 - 3.5)) * 100)));
-     const temperature = telemetry.internalTemperature;
-     let communicationStatus: "stable" | "unstable" | "lost";
-      if (telemetry.communicationLogs.signalStrength >= -85) {
-        communicationStatus = "stable";
-      } else if (telemetry.communicationLogs.signalStrength >= -90) {
-        communicationStatus = "unstable";
-      } else {
-        communicationStatus = "lost";
-      }
-     const commStatusColor = communicationStatus === 'stable' ? 'text-green-600' :
-                             communicationStatus === 'unstable' ? 'text-yellow-600' : 'text-red-600';
-
-
-   return (
-      <>
-          {/* Header with Satellite Selector and AI Explanation Button */}
-          {/* Moved header outside of HomeContent, rendered in Home component */}
-
-         {/* Key Telemetry Indicators */}
-         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4">
-           <Card>
-             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-               <CardTitle className="text-sm font-medium">Battery Level</CardTitle>
-                <Battery className="h-4 w-4 text-muted-foreground" />
-             </CardHeader>
-             <CardContent>
-               <div className="text-2xl font-bold">{batteryLevel}%</div>
-               <p className="text-xs text-muted-foreground">({telemetry.batteryVoltage?.toFixed(2)}V)</p>
-             </CardContent>
-           </Card>
-
-           <Card>
-             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-               <CardTitle className="text-sm font-medium">Internal Temp</CardTitle>
-                <Thermometer className="h-4 w-4 text-muted-foreground" />
-             </CardHeader>
-             <CardContent>
-               <div className="text-2xl font-bold">{temperature?.toFixed(1)}°C</div>
-                <p className="text-xs text-muted-foreground">Core electronics</p>
-             </CardContent>
-           </Card>
-
-           <Card>
-             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-               <CardTitle className="text-sm font-medium">Comm Status</CardTitle>
-                <Mail className="h-4 w-4 text-muted-foreground" />
-             </CardHeader>
-             <CardContent>
-               <div className={`text-2xl font-bold capitalize ${commStatusColor}`}>
-                 {communicationStatus}
-               </div>
-               <p className="text-xs text-muted-foreground">Signal: {telemetry.communicationLogs?.signalStrength.toFixed(0)} dBm</p>
-             </CardContent>
-           </Card>
-         </div>
-
-          {/* AI Analysis and Current Telemetry Details */}
-         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4">
-           <Card>
-             <CardHeader>
-               <CardTitle>AI Anomaly Risk Score</CardTitle>
-             </CardHeader>
-             <CardContent>
-                 <RiskScoreDisplay
-                   riskScoreData={riskScoreData}
-                   isLoading={isLoadingRiskScore}
-                   error={riskScoreError}
-                   calculateRiskScore={calculateRiskScore} // Pass the function
-                 />
-             </CardContent>
-           </Card>
-
-            <Card>
-             <CardHeader>
-               <CardTitle>Current Telemetry Snapshot</CardTitle>
-             </CardHeader>
-             <CardContent>
-                {/* Display more detailed telemetry */}
-               <div className="space-y-1 text-sm">
-                 <div><Waves className="inline h-4 w-4 mr-2 text-muted-foreground"/> Solar: {telemetry.solarPanelOutput?.toFixed(2)}W</div>
-                 <div><Thermometer className="inline h-4 w-4 mr-2 text-blue-500"/> Ext Temp: {telemetry.externalTemperature?.toFixed(1)}°C</div>
-                 <div><Navigation className="inline h-4 w-4 mr-2 text-muted-foreground"/> Gyro: ({telemetry.gyroscope?.x?.toFixed(2)}, {telemetry.gyroscope?.y?.toFixed(2)}, {telemetry.gyroscope?.z?.toFixed(2)})</div>
-                 <div><Cpu className="inline h-4 w-4 mr-2 text-muted-foreground"/> Mag: ({telemetry.magnetometer?.x?.toFixed(3)}, {telemetry.magnetometer?.y?.toFixed(3)}, ...)</div> {/* Abbreviated Mag */}
-                 <div><Mail className="inline h-4 w-4 mr-2 text-muted-foreground"/> Delay: {telemetry.communicationLogs?.packetDelay} ms</div>
-               </div>
-             </CardContent>
-           </Card>
-
-            {/* Placeholder for future actions or status */}
-            <Card>
-               <CardHeader>
-                 <CardTitle>System Status</CardTitle>
-               </CardHeader>
-               <CardContent>
-                 <div className="flex items-center gap-2">
-                   {isClient && ( // Only render Badge on client
-                     <Badge variant={alerts.some(a => a.variant === 'destructive') ? 'destructive' : 'secondary'}>
-                        {alerts.some(a => a.variant === 'destructive') ? 'Alert Active' : 'Nominal'}
-                     </Badge>
-                   )}
-                    <p className="text-sm text-muted-foreground">
-                      {isClient ? `Last update: ${telemetry.timestamp?.toLocaleTimeString()}` : 'Loading...'}
-                    </p>
-                 </div>
-                  {/* Potential actions could go here */}
-               </CardContent>
-             </Card>
-         </div>
-
-
-          {/* Telemetry History Chart */}
-           <Card className="mb-4">
-             <CardHeader>
-               <CardTitle>Telemetry History (Voltage, Temp, Signal)</CardTitle>
-             </CardHeader>
-             <CardContent className="h-[250px]"> {/* Fixed height for container */}
-                {isClient && formattedChartData.length > 0 ? ( // Render chart only on client and if data exists
-                  <DynamicResponsiveContainer width="100%" height="100%">
-                   <DynamicAreaChart data={formattedChartData} margin={{ top: 5, right: 20, left: -10, bottom: 0 }}>
-                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                     <XAxis dataKey="name" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                     <YAxis yAxisId="left" stroke="hsl(var(--chart-1))" tick={{ fontSize: 10 }} domain={['dataMin - 0.1', 'dataMax + 0.1']} />
-                     <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--chart-2))" tick={{ fontSize: 10 }} domain={['dataMin - 5', 'dataMax + 5']} />
-                     <YAxis yAxisId="signal" orientation="right" dx={40} stroke="hsl(var(--chart-3))" tick={{ fontSize: 10 }} domain={[-120, -50]} />
-                     <Tooltip contentStyle={{ fontSize: '12px', padding: '5px', backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}/>
-                     <defs>
-                        <linearGradient id="colorVoltage" x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.8}/>
-                           <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0}/>
-                         </linearGradient>
-                         <linearGradient id="colorTemp" x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.8}/>
-                           <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0}/>
-                         </linearGradient>
-                          <linearGradient id="colorSignal" x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.8}/>
-                           <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0}/>
-                         </linearGradient>
-                     </defs>
-                     <Area yAxisId="left" type="monotone" dataKey="voltage" stroke="hsl(var(--chart-1))" fillOpacity={1} fill="url(#colorVoltage)" name="Voltage (V)" dot={false} />
-                     <Area yAxisId="right" type="monotone" dataKey="temp" stroke="hsl(var(--chart-2))" fillOpacity={1} fill="url(#colorTemp)" name="Temp (°C)" dot={false} />
-                     <Area yAxisId="signal" type="monotone" dataKey="signal" stroke="hsl(var(--chart-3))" fillOpacity={1} fill="url(#colorSignal)" name="Signal (dBm)" dot={false} />
-                   </DynamicAreaChart>
-                 </DynamicResponsiveContainer>
-               ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    {isClient ? 'Waiting for telemetry history...' : <Skeleton className="h-full w-full"/>}
-                  </div>
-               )}
-             </CardContent>
-           </Card>
-
-
-         {/* Live Alerts Section */}
-         <div>
-           <h2 className="font-semibold text-xl mb-2">Live Alerts</h2>
-           {isClient ? ( // Only render ScrollArea and content on client
-             <ScrollArea className="h-[250px] w-full rounded-md border">
-                <div className="p-4 space-y-3">
-                 {alerts.length === 0 ? (
-                   <p className="text-muted-foreground text-center py-4">No active alerts for {selectedSatelliteId}.</p>
-                 ) : (
-                   alerts.map((alert) => (
-                     <Alert key={alert.id} variant={alert.variant} className="mb-3">
-                       <AlertTriangle className="h-4 w-4"/>
-                       <AlertTitle>{alert.title}</AlertTitle>
-                       <AlertDescription>
-                         {alert.description}
-                         <span className="block text-xs text-muted-foreground mt-1">
-                             {alert.timestamp.toLocaleString()}
-                          </span>
-                       </AlertDescription>
-                     </Alert>
-                   ))
-                 )}
-                </div>
-             </ScrollArea>
-            ) : (
-              <Skeleton className="h-[250px] w-full rounded-md border"/>
-            )}
-         </div>
-      </>
-    );
-});
-HomeContent.displayName = 'HomeContent';
-
-
-// Main Home Component
 export default function Home() {
-  const { selectedSatelliteId } = useSatellite();
-  const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
-  const [alerts, setAlerts] = useState<AlertInfo[]>([]);
-  const [telemetryError, setTelemetryError] = useState<string | null>(null); // Renamed state
-  const [isLoadingTelemetry, setIsLoadingTelemetry] = useState(true);
+  const [batteryLevel, setBatteryLevel] = useState<number>(50);
+  const [temperature, setTemperature] = useState<number>(25);
+  const [communicationStatus, setCommunicationStatus] = useState<"stable" | "unstable" | "lost">("stable");
   const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
-  const [isLoadingRiskScore, setIsLoadingRiskScore] = useState(false);
-  const [riskScoreError, setRiskScoreError] = useState<string | null>(null);
-  const [telemetryHistory, setTelemetryHistory] = useState<TelemetryData[]>([]);
-  const [isClient, setIsClient] = useState(false); // Use this for client-side checks
+  const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Direct usage of useSidebar here might still cause issues if Home isn't properly nested.
-  // Let's remove it from here and rely on AppSidebar/SidebarTrigger from layout.
-  // const { setOpenMobile } = useSidebar();
+  // Use the context hook to get the selected satellite ID
+   const { selectedSatelliteId } = useSatellite(); // Use context
 
-  useEffect(() => {
-    setIsClient(true); // Component has mounted
-  }, []);
 
-  // Subscribe to telemetry data
-  useEffect(() => {
-    if (!selectedSatelliteId || !isClient) return; // Only run on client and if satellite selected
-
-    setIsLoadingTelemetry(true);
-    setTelemetryError(null); // Use renamed state setter
-    setTelemetry(null);
-    setAlerts([]);
-    setRiskScoreData(null);
-    setRiskScoreError(null);
-    setTelemetryHistory([]);
-
-    const unsubscribe = subscribeToTelemetryData(selectedSatelliteId, (data) => {
-      setIsLoadingTelemetry(false);
-      if (data) {
-        setTelemetry(data);
-        setAlerts(generateAlerts(data));
-        // Limit history to last 30 points
-        setTelemetryHistory(prev => [...prev.slice(-29), data]);
-        // Consider if auto-calculation is desired or keep manual trigger
-        // calculateRiskScore(data);
-        setTelemetryError(null); // Clear error on success
-      } else {
-        // Handle case where data is null (e.g., initial load or temporary issue)
-        console.warn(`No telemetry data received for ${selectedSatelliteId}.`);
-        // Optionally keep previous data/alerts or clear them
-        // setTelemetry(null);
-        // setAlerts([]);
-        // setTelemetryHistory([]);
-      }
-    }, (subError) => {
-      console.error("Telemetry subscription error:", subError);
-      setTelemetryError(`Failed to subscribe to telemetry for ${selectedSatelliteId}.`); // Use renamed state setter
-      setIsLoadingTelemetry(false);
-      // Clear potentially stale data on error
-      setTelemetry(null);
-      setAlerts([]);
-      setTelemetryHistory([]);
-      setRiskScoreData(null); // Clear AI data too
-      setRiskScoreError(null);
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [selectedSatelliteId, isClient]); // Re-subscribe when satellite ID or client mount status changes
-
-  // Function to calculate risk score using AI (manual trigger)
-  const calculateRiskScore = useCallback(async () => {
-    if (!telemetry) {
-      setRiskScoreError("Cannot calculate risk score without current telemetry data.");
-      setRiskScoreData(null);
-      return;
-    }
-
-    // Extract data needed for the AI flow
-    const batteryLevel = Math.min(100, Math.max(0, Math.round(((telemetry.batteryVoltage - 3.5) / (4.2 - 3.5)) * 100)));
-    const temperature = telemetry.internalTemperature;
-    let communicationStatus: "stable" | "unstable" | "lost";
-    if (telemetry.communicationLogs.signalStrength >= -85) {
-      communicationStatus = "stable";
-    } else if (telemetry.communicationLogs.signalStrength >= -90) {
-      communicationStatus = "unstable";
-    } else {
-      communicationStatus = "lost";
-    }
-
-    setIsLoadingRiskScore(true);
-    setRiskScoreError(null);
-
+  const calculateRiskScore = async () => {
     try {
-      const result = await getRiskScore({
+      setError(null);
+      const riskScore = await getRiskScore({
         batteryLevel,
         temperature,
         communicationStatus,
       });
-      setRiskScoreData(result);
-    } catch (aiError: any) {
-        console.error("Error calling getRiskScore AI flow:", aiError);
-        let errorMessage = "Failed to get risk score.";
-        if (aiError instanceof Error) {
-            errorMessage = aiError.message;
-        } else if (typeof aiError === 'string') {
-            errorMessage = aiError;
-        }
-
-        // Provide more specific error messages
-        if (errorMessage.includes('400 Bad Request') || errorMessage.includes('API key not valid')) {
-            setRiskScoreError("AI Error: Invalid API Key or bad request. Please check your .env configuration and Genkit setup.");
-        } else if (errorMessage.includes('429')) {
-             setRiskScoreError("AI Error: API Rate Limit Exceeded. Please try again later.");
-        } else {
-            setRiskScoreError(`AI Error: ${errorMessage}`);
-        }
-      setRiskScoreData(null);
-    } finally {
-      setIsLoadingRiskScore(false);
+      setRiskScoreData(riskScore);
+    } catch (error: any) {
+      setError("An error occurred while calculating risk score: " + error.message);
+       // Log the full error for debugging
+      console.error("Risk Score Calculation Error:", error);
     }
-  }, [telemetry]); // Depend on telemetry
+  };
 
-   // --- Component Return ---
+  const fetchTelemetry = useCallback(async () => {
+    try {
+      setError(null);
+      const telemetryData = await getTelemetryData(selectedSatelliteId); // Use selected ID
+      setTelemetry(telemetryData);
+       // Update input fields based on fetched/simulated data if needed
+      if (telemetryData) {
+        setBatteryLevel(Math.min(100, Math.max(0, Math.round(((telemetryData.batteryVoltage - 3.5) / (4.2 - 3.5)) * 100))));
+        setTemperature(telemetryData.internalTemperature);
+         // Determine communication status based on signal strength (example logic)
+        if (telemetryData.communicationLogs?.signalStrength >= -85) {
+          setCommunicationStatus("stable");
+        } else if (telemetryData.communicationLogs?.signalStrength >= -90) {
+          setCommunicationStatus("unstable");
+        } else {
+          setCommunicationStatus("lost");
+        }
+      }
+    } catch (error: any) {
+      setError("An error occurred while fetching telemetry data: " + error.message);
+       console.error("Telemetry Fetch Error:", error);
+    }
+  }, [selectedSatelliteId]); // Depend on selectedSatelliteId
+
+  useEffect(() => {
+    // Initial fetch
+    fetchTelemetry();
+
+    // Set up interval to fetch/simulate data periodically
+    const intervalId = setInterval(fetchTelemetry, 5000); // Fetch every 5 seconds
+
+    // Cleanup function to clear the interval when the component unmounts or selectedSatelliteId changes
+    return () => clearInterval(intervalId);
+  }, [fetchTelemetry]); // fetchTelemetry includes selectedSatelliteId dependency
+
   return (
-     // The main layout including Sidebar is handled by src/app/layout.tsx
-     <>
-       {/* Sidebar is rendered via layout */}
-       <div className="flex-1">
-          {/* Header for mobile */}
-          <header className="sticky top-0 z-10 flex h-[57px] items-center gap-1 border-b bg-background px-4 md:hidden">
-            {/* Ensure SidebarTrigger is only rendered client-side */}
-            {isClient && <SidebarTrigger className="md:hidden"/>}
-            <h1 className="text-xl font-semibold ml-2">CubeSense</h1>
-             {/* Optional: Add SatelliteSelector or other controls here for mobile */}
-             {isClient && <div className="ml-auto"><SatelliteSelector /></div>}
-          </header>
-
-          {/* Page content */}
-          <div className="p-4">
-             {/* Header with Satellite Selector and AI Explanation Button (Desktop) */}
-             <div className="hidden md:flex flex-wrap items-center justify-between gap-4 mb-4">
-               <div className="flex items-center gap-2">
-                 <h1 className="font-semibold text-2xl">
-                    CubeSense Dashboard ({selectedSatelliteId})
-                 </h1>
-               </div>
-               <div className="flex items-center gap-4">
-                  {/* Ensure SatelliteSelector and AnomalyExplanation are only rendered client-side */}
-                  {isClient && <SatelliteSelector />}
-                  {isClient && (
-                    <DynamicAnomalyExplanation
-                      telemetry={telemetry}
-                      satelliteId={selectedSatelliteId}
-                    />
-                  )}
-               </div>
-             </div>
-             <Separator className="my-4 hidden md:block" /> {/* Hide separator on mobile */}
-
-             {/* Render the main content */}
-              <HomeContent
-                telemetry={telemetry}
-                alerts={alerts}
-                telemetryHistory={telemetryHistory}
-                riskScoreData={riskScoreData}
-                isLoadingRiskScore={isLoadingRiskScore}
-                riskScoreError={riskScoreError}
-                isLoadingTelemetry={isLoadingTelemetry}
-                telemetryError={telemetryError} // Pass renamed prop
-                selectedSatelliteId={selectedSatelliteId}
-                calculateRiskScore={calculateRiskScore} // Pass the function
-              />
-          </div>
-        </div>
-      </>
+    // SidebarProvider is now in layout.tsx
+      <HomeInner
+        batteryLevel={batteryLevel}
+        temperature={temperature}
+        communicationStatus={communicationStatus}
+        setBatteryLevel={setBatteryLevel}
+        setTemperature={setTemperature}
+        setCommunicationStatus={setCommunicationStatus}
+        riskScoreData={riskScoreData}
+        telemetry={telemetry}
+        error={error}
+        calculateRiskScore={calculateRiskScore}
+      />
   );
 }

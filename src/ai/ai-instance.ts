@@ -1,19 +1,34 @@
+'use server'; // Add 'use server' directive for server-side execution
 
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
 
-// Log the API key to verify it's loaded correctly (remove this in production)
-console.log('Attempting to use Google GenAI API Key:', process.env.GOOGLE_GENAI_API_KEY ? 'Loaded' : 'Not Loaded/Undefined');
-// You can temporarily uncomment the line below to log the actual key for debugging,
-// but **ensure you remove it before committing or deploying**.
-// console.log('API Key Value:', process.env.GOOGLE_GENAI_API_KEY);
+// --- Enhanced API Key Logging ---
+const apiKey = process.env.GOOGLE_GENAI_API_KEY;
+console.log('--- Genkit Initialization ---');
+if (apiKey) {
+  console.log('GOOGLE_GENAI_API_KEY environment variable FOUND.');
+  // Avoid logging the actual key in production logs
+  // console.log('API Key Value (masked):', apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4));
+} else {
+  console.error('ERROR: GOOGLE_GENAI_API_KEY environment variable NOT FOUND.');
+  console.error('Please ensure the GOOGLE_GENAI_API_KEY is set in your .env file and the server is restarted.');
+}
+// --- End Enhanced Logging ---
 
 export const ai = genkit({
   promptDir: './prompts',
   plugins: [
     googleAI({
-      apiKey: process.env.GOOGLE_GENAI_API_KEY,
+      // Explicitly pass the apiKey variable read from process.env
+      apiKey: apiKey,
     }),
   ],
-  model: 'googleai/gemini-2.0-flash', // Ensure this model is appropriate for your key/project
+  // Ensure this model is available in your Google Cloud project and enabled for the API key
+  model: 'googleai/gemini-2.0-flash',
+  // Add detailed logging within Genkit itself if possible/needed
+  // logLevel: 'debug', // Uncomment for more verbose Genkit logs
 });
+
+console.log('Genkit ai instance configured.');
+console.log('--- End Genkit Initialization ---');
