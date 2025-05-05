@@ -1,4 +1,3 @@
-
 'use client';
 import type {Metadata} from 'next';
 import { Geist, Geist_Mono } from 'next/font/google'; // Correct import if using next/font
@@ -27,7 +26,7 @@ import {
 import { useRouter, usePathname } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import SatelliteSelector from '@/components/SatelliteSelector';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { subscribeToTelemetryData, TelemetryData } from '@/services/telemetry';
 import { useSatellite } from '@/context/SatelliteContext'; // Import context hook
 
@@ -42,52 +41,58 @@ const geistMono = Geist_Mono({ // Correct usage
 });
 
 // Client component, cannot use export const metadata
-// Use <head> tags directly within the RootLayout component return
 
-// Shared Sidebar Component - Needs context to get selectedSatelliteId
-function AppSidebar() {
+// Memoize AppSidebar
+const AppSidebar = memo(() => {
   const router = useRouter();
   const pathname = usePathname();
   const { setOpenMobile } = useSidebar();
   const [destructiveAlertCount, setDestructiveAlertCount] = useState(0);
-  const { selectedSatelliteId } = useSatellite(); // Get ID from context
+  const { selectedSatelliteId } = useSatellite();
+  const [isClient, setIsClient] = useState(false);
 
-  // Alert count logic based on telemetry subscription
+  useEffect(() => { setIsClient(true); }, []);
+
+  // Alert count logic
   useEffect(() => {
-    if (!selectedSatelliteId) return; // Don't subscribe if no satellite is selected
+    if (!isClient || !selectedSatelliteId) return;
 
     const unsubscribe = subscribeToTelemetryData(selectedSatelliteId, (data) => {
       if (data) {
-        // Simplified critical alert logic for badge count
         let count = 0;
-        if (data.internalTemperature > 38) count++; // Critical temp
-        if (data.batteryVoltage < 3.65) count++; // Critical voltage
-        if (data.communicationLogs?.signalStrength < -95) count++; // Critical signal
-        if (data.communicationLogs?.packetDelay > 300) count++; // Critical delay
+        if (data.internalTemperature > 38) count++;
+        if (data.batteryVoltage < 3.65) count++;
+        if (data.communicationLogs?.signalStrength < -95) count++;
+        if (data.communicationLogs?.packetDelay > 300) count++;
         setDestructiveAlertCount(count);
       } else {
         setDestructiveAlertCount(0);
       }
     }, (error) => {
       console.error("Error getting alert count for sidebar:", error);
-      setDestructiveAlertCount(0); // Reset on error
+      setDestructiveAlertCount(0);
     });
 
-    return () => unsubscribe(); // Cleanup subscription
-  }, [selectedSatelliteId]); // Re-subscribe if satellite changes
+    return () => unsubscribe();
+  }, [selectedSatelliteId, isClient]);
 
   const handleNavigation = (path: string) => {
-    setOpenMobile(false); // Close mobile sidebar on navigation
+    setOpenMobile(false);
     router.push(path);
   };
 
+  // Render Sidebar only on the client to avoid hydration issues with dynamic content (badge)
+  if (!isClient) {
+    // Optionally render a skeleton or null on the server
+    return null;
+  }
+
   return (
-    // Sidebar structure using components from ui/sidebar
-    <Sidebar className="w-60 hidden md:flex md:flex-col"> {/* Hidden on mobile */}
+    <Sidebar className="w-60 hidden md:flex md:flex-col">
       <SidebarHeader>
-         <div className="flex flex-col gap-2 p-4"> {/* Added padding */}
+         <div className="flex flex-col gap-2 p-4">
            <div className="flex items-center gap-2">
-              <Rocket className="h-6 w-6 text-primary" /> {/* App Icon */}
+              <Rocket className="h-6 w-6 text-primary" />
               <h2 className="font-semibold text-lg">CubeSense</h2>
             </div>
            <SatelliteSelector />
@@ -122,13 +127,14 @@ function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <p className="text-xs text-muted-foreground p-4"> {/* Added padding */}
+        <p className="text-xs text-muted-foreground p-4">
           CubeSense Monitoring v1.0
         </p>
       </SidebarFooter>
     </Sidebar>
   );
-}
+});
+AppSidebar.displayName = 'AppSidebar';
 
 // Root Layout Component
 export default function RootLayout({
@@ -139,32 +145,18 @@ export default function RootLayout({
   return (
     <html lang="en">
        <head>
-         {/* Metadata can be placed directly in <head> for client components */}
          <title>CubeSense - Satellite Monitoring</title>
          <meta name="description" content="Real-time CubeSat anomaly detection dashboard powered by AI." />
-          {/* Add favicon links here if you have them */}
        </head>
-       {/* Apply font variables to the body */}
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
-         {/* Wrap the entire application that needs satellite context */}
         <SatelliteProvider>
-          {/* Wrap the entire application that needs sidebar context */}
           <SidebarProvider>
              <div className="flex min-h-screen bg-background">
-               {/* Render the AppSidebar which uses SatelliteContext */}
                <AppSidebar />
-                {/* Main content area */}
+               {/* Main content area */}
                <main className="flex-1 flex flex-col">
-                 {/* Optional Header for mobile view or global actions */}
-                 <header className="sticky top-0 z-10 flex h-[57px] items-center gap-1 border-b bg-background px-4 md:hidden">
-                    <SidebarTrigger className="md:hidden"/>
-                    <h1 className="text-xl font-semibold">CubeSense</h1>
-                    {/* Add other header elements like user profile if needed */}
-                 </header>
-                 {/* The actual page content passed as children */}
-                 <div className="flex-1"> {/* Let content area grow */}
-                   {children}
-                 </div>
+                 {/* Content is rendered directly now, header is moved to individual pages for mobile */}
+                 {children}
                </main>
              </div>
           </SidebarProvider>
