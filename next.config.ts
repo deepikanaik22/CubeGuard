@@ -20,7 +20,8 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     // Ensure serverComponentsExternalPackages includes packages needed by Genkit/Telemetry
-    serverComponentsExternalPackages: ['@opentelemetry/sdk-trace-node'], // Keep existing if still needed
+    // Add @opentelemetry/context-async-hooks as it seems to be the direct dependency causing the issue
+    serverComponentsExternalPackages: ['@opentelemetry/sdk-trace-node', '@opentelemetry/context-async-hooks'],
   },
   // Add webpack configuration to handle 'async_hooks' and other Node.js modules
   webpack: (config, { isServer, webpack }) => {
@@ -39,19 +40,6 @@ const nextConfig: NextConfig = {
         // Add other Node.js modules here if they cause issues
       };
     }
-
-    // This part might be necessary if 'async_hooks' is somehow still being
-    // processed despite the fallback. It defines 'async_hooks' as an external
-    // module that won't be bundled.
-    // config.externals = config.externals || [];
-    // if (!isServer) {
-    //   if (Array.isArray(config.externals)) {
-    //     config.externals.push('async_hooks');
-    //   } else {
-    //      // Handle object externals if necessary
-    //      (config.externals as Record<string, any>)['async_hooks'] = 'var {}';
-    //   }
-    // }
 
     // Important: return the modified config
     return config;
