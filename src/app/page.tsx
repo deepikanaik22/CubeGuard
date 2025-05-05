@@ -1,5 +1,4 @@
 'use client';
-
 import dynamic from 'next/dynamic';
 import {
   Sidebar,
@@ -14,7 +13,7 @@ import {
   SidebarProvider,
   useSidebar
 } from "@/components/ui/sidebar";
-import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'; // Added CardDescription
+import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card';
 import {
   Battery,
   Thermometer,
@@ -109,7 +108,8 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
             <Skeleton className="h-8 w-1/2" /> // Skeleton for SSR/initial load
           )}
         </div>
-        <p className="text-sm text-muted-foreground mt-1">
+         {/* Changed p to div to fix hydration error */}
+        <div className="text-sm text-muted-foreground mt-1">
           {isClient ? (
             isLoading ? (
               'AI analyzing risk...'
@@ -123,7 +123,7 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
           ) : (
             <Skeleton className="h-4 w-3/4 mt-1" /> // Skeleton for SSR/initial load
           )}
-        </p>
+        </div>
         {isClient && ( // Only render button on client
           <Button
             onClick={calculateRiskScore}
@@ -169,7 +169,17 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
 
       try {
         console.log(`Requesting anomaly explanation for ${satelliteId}`);
-        const explanation = await explainAnomalyScore({satelliteId: satelliteId});
+        // const explanation = await explainAnomalyScore({satelliteId: satelliteId});
+         const response = await fetch('/api/explainAnomalyScore', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ satelliteId }),
+         });
+          if (!response.ok) {
+             const errorData = await response.json();
+              throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+          }
+         const explanation = await response.json();
         console.log(`Received anomaly explanation for ${satelliteId}:`, explanation);
         setAnomalyExplanation(explanation);
       } catch (aiError: any) {
@@ -189,7 +199,10 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
              setAnomalyError("AI Error: Received an unexpected response format from the AI. Please try again.");
          } else if (errorMessage.includes("Failed to retrieve telemetry")) {
              setAnomalyError(`Error: Could not retrieve telemetry data for ${satelliteId}. ${errorMessage}`);
-         } else {
+         } else if (errorMessage.includes("unexpected response")) {
+             setAnomalyError("AI Error: An unexpected response was received from the server");
+         }
+         else {
             setAnomalyError(`AI Error: ${errorMessage}`); // General error message
          }
       } finally {
@@ -319,7 +332,7 @@ function HomeContent({
   }, []);
 
   return (
-    <>
+    <div className="flex-1">
       {/* Header for mobile - Keep this structure */}
       <header className="sticky top-0 z-10 flex h-[57px] items-center gap-1 border-b bg-background px-4 md:hidden">
         {isClient && <SidebarTrigger className="md:hidden" />} {/* Conditionally render based on isClient */}
@@ -437,13 +450,13 @@ function HomeContent({
           </CardContent>
         </Card>
       </div>
-    </>
+    </div>
   );
 }
 
 
 // Renamed original Home component to HomeContainer
-function HomeContainer() {
+export default function HomeContainer() {
   const router = useRouter();
   const {selectedSatelliteId} = useSatellite(); // Use context
 
@@ -517,6 +530,8 @@ function HomeContainer() {
              } else {
                setDisplayCommStatus("lost");
              }
+             // Optionally, trigger risk score calculation automatically on new data
+             // calculateRiskScore(); // Uncomment if auto-calculation is desired
          } else {
              // Handle case where data is null (e.g., initial load or error)
              setDisplayBatteryLevel(0);
@@ -569,7 +584,19 @@ function HomeContainer() {
                                 : "unstable", // Default to unstable if status is unexpected
        };
         console.log("Calculating risk score with input:", inputData);
-        const riskScore = await getRiskScore(inputData);
+        // Call the API route instead of the flow directly
+         const response = await fetch('/api/getRiskScore', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify(inputData),
+         });
+
+         if (!response.ok) {
+             const errorData = await response.json();
+              throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+         }
+
+        const riskScore = await response.json();
         console.log("Received risk score:", riskScore);
         setRiskScoreData(riskScore);
     } catch (error: any) {
@@ -612,7 +639,6 @@ function HomeContainer() {
     <div className="flex min-h-screen">
       {/* Sidebar is rendered by AppSidebar in layout now */}
       {/* Main Content Area */}
-      <div className="flex-1">
         <HomeContent
           batteryLevel={displayBatteryLevel}
           temperature={displayTemperature}
@@ -624,10 +650,6 @@ function HomeContainer() {
           telemetryError={telemetryError}
           calculateRiskScore={calculateRiskScore}
         />
-      </div>
     </div>
   );
 }
-
-// Export the container component as default
-export default HomeContainer;
