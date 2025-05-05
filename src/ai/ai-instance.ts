@@ -1,10 +1,10 @@
-'use server';
+'use client'; // Remove 'use server' directive
 // Removed 'use server' directive as this file exports the 'ai' object - REVERTED based on subsequent errors indicating this should be 'use server'
 
 
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
-import {TelemetryData} from '@/services/telemetry'; // Import TelemetryData for schema
+import type { TelemetryData } from '@/services/telemetry'; // Import TelemetryData for schema
 
 // --- Enhanced API Key Logging ---
 const apiKey = process.env.GOOGLE_GENAI_API_KEY;
