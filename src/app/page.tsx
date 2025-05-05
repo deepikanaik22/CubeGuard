@@ -10,7 +10,7 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarSeparator,
-  useSidebar,
+  useSidebar, // Import useSidebar directly
 } from "@/components/ui/sidebar";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
 import {
@@ -81,7 +81,7 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(({ riskScoreData,
        {isClient && error && (
          <Alert variant="destructive" className="mb-2 text-xs">
            <AlertTriangle className="h-3 w-3" />
-           <AlertTitle className="text-xs">AI Error</AlertTitle>
+           <AlertTitle className="text-xs">AI Risk Score Error</AlertTitle>
            <AlertDescription>{error}</AlertDescription>
          </Alert>
        )}
@@ -89,7 +89,7 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(({ riskScoreData,
          {isClient ? (isLoading ? 'Calculating...' : (riskScoreData ? `${riskScoreData.riskScore}%` : 'N/A')) : <Skeleton className="h-8 w-1/2"/>}
        </p>
        <p className="text-sm text-muted-foreground">
-         {isClient ? (isLoading ? 'AI analyzing risk...' : (riskScoreData ? riskScoreData.explanation : 'Awaiting data for analysis.')) : <Skeleton className="h-4 w-3/4"/>}
+         {isClient ? (isLoading ? 'AI analyzing risk...' : (riskScoreData ? riskScoreData.explanation : 'Click button to calculate risk.')) : <Skeleton className="h-4 w-3/4"/>}
        </p>
        {isClient && ( // Only render button on client
          <Button onClick={calculateRiskScore} disabled={isLoading} className="mt-4">
@@ -127,18 +127,25 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(({ telemetry,
     setAnomalyExplanation(null); // Clear previous explanation
 
     try {
+      // Ensure telemetry data is passed if the flow requires it (currently it uses a tool)
       const explanation = await explainAnomalyScore({ satelliteId: satelliteId });
       setAnomalyExplanation(explanation);
     } catch (aiError: any) {
       console.error("Error calling explainAnomalyScore AI flow:", aiError);
-       const errorMessage = aiError.message || "Failed to get explanation";
-      if (errorMessage.includes('429')) {
-           setAnomalyError("API Rate Limit Exceeded. Please try again later.");
-      } else if (errorMessage.includes('API key not valid')) {
-           setAnomalyError("Invalid API Key. Please check your configuration.");
-      } else {
-           setAnomalyError(`AI Error: ${errorMessage}`);
-      }
+       let errorMessage = "Failed to get anomaly explanation.";
+        if (aiError instanceof Error) {
+            errorMessage = aiError.message;
+        } else if (typeof aiError === 'string') {
+            errorMessage = aiError;
+        }
+
+        if (errorMessage.includes('400 Bad Request') || errorMessage.includes('API key not valid')) {
+            setAnomalyError("AI Error: Invalid API Key or bad request. Please check your configuration and Genkit setup.");
+        } else if (errorMessage.includes('429')) {
+            setAnomalyError("AI Error: API Rate Limit Exceeded. Please try again later.");
+        } else {
+            setAnomalyError(`AI Error: ${errorMessage}`);
+        }
     } finally {
       setIsLoadingAnomaly(false);
     }
@@ -147,7 +154,8 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(({ telemetry,
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button onClick={fetchAnomalyExplanation} disabled={!isClient || !telemetry || isLoadingAnomaly} variant="outline">
+        {/* Ensure button is only interactive on client */}
+        <Button onClick={isClient ? fetchAnomalyExplanation : undefined} disabled={!isClient || !telemetry || isLoadingAnomaly} variant="outline">
           {isLoadingAnomaly ? 'Loading...' : 'Get Anomaly Explanation'}
         </Button>
       </DialogTrigger>
@@ -155,7 +163,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(({ telemetry,
         <DialogHeader>
           <DialogTitle>Anomaly Explanation for {satelliteId}</DialogTitle>
            <DialogDescription>
-            AI-powered analysis of the anomaly risk score.
+            AI-powered analysis of the anomaly risk score based on latest telemetry.
           </DialogDescription>
         </DialogHeader>
         <div className="mt-4">
@@ -197,7 +205,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(({ telemetry,
 AnomalyExplanation.displayName = 'AnomalyExplanation';
 
 // Keep DynamicAnomalyExplanation for client-side rendering if needed, though memo might suffice
-// const DynamicAnomalyExplanation = dynamic(() => Promise.resolve(AnomalyExplanation), { ssr: false });
+const DynamicAnomalyExplanation = dynamic(() => Promise.resolve(AnomalyExplanation), { ssr: false });
 
 
 // Define alert types
@@ -318,7 +326,7 @@ const HomeContent = memo(({
   isLoadingRiskScore,
   riskScoreError,
   isLoadingTelemetry,
-  error,
+  telemetryError, // Changed prop name
   selectedSatelliteId,
   calculateRiskScore // Pass calculateRiskScore down
 }: {
@@ -329,7 +337,7 @@ const HomeContent = memo(({
   isLoadingRiskScore: boolean;
   riskScoreError: string | null;
   isLoadingTelemetry: boolean;
-  error: string | null;
+  telemetryError: string | null; // Changed prop name
   selectedSatelliteId: string;
   calculateRiskScore: () => void; // Define the prop type
 }) => {
@@ -350,18 +358,22 @@ const HomeContent = memo(({
      <div className="space-y-4">
          <div className="flex items-center justify-between mb-4">
              <Skeleton className="h-8 w-1/3" />
-             <Skeleton className="h-10 w-36" />
+             {/* Skeleton for satellite selector and explanation button */}
+             <div className="flex items-center gap-4">
+                 <Skeleton className="h-10 w-40" />
+                 <Skeleton className="h-10 w-44" />
+             </div>
          </div>
-         <Separator/>
+         <Separator className="mb-4"/>
          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4">
              <Skeleton className="h-24"/>
              <Skeleton className="h-24"/>
              <Skeleton className="h-24"/>
          </div>
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4">
-             <Skeleton className="h-44"/> {/* Adjusted height for AI card */}
-             <Skeleton className="h-44"/>
-             <Skeleton className="h-44"/>
+             <Skeleton className="h-44"/> {/* AI card */}
+             <Skeleton className="h-44"/> {/* Telemetry Snapshot */}
+             <Skeleton className="h-44"/> {/* System Status */}
          </div>
          <Skeleton className="h-64 mb-4"/> {/* Chart */}
          <Skeleton className="h-40"/> {/* Alerts */}
@@ -374,12 +386,12 @@ const HomeContent = memo(({
     }
 
     // Show error state for telemetry subscription
-    if (error) {
+    if (telemetryError) { // Use telemetryError
         return (
           <Alert variant="destructive" className="my-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Telemetry Subscription Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{telemetryError}</AlertDescription>
           </Alert>
         );
     }
@@ -412,6 +424,9 @@ const HomeContent = memo(({
 
    return (
       <>
+          {/* Header with Satellite Selector and AI Explanation Button */}
+          {/* Moved header outside of HomeContent, rendered in Home component */}
+
          {/* Key Telemetry Indicators */}
          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4">
            <Card>
@@ -445,7 +460,7 @@ const HomeContent = memo(({
                <div className={`text-2xl font-bold capitalize ${commStatusColor}`}>
                  {communicationStatus}
                </div>
-               <p className="text-xs text-muted-foreground">Signal: {telemetry.communicationLogs?.signalStrength} dBm</p>
+               <p className="text-xs text-muted-foreground">Signal: {telemetry.communicationLogs?.signalStrength.toFixed(0)} dBm</p>
              </CardContent>
            </Card>
          </div>
@@ -476,7 +491,7 @@ const HomeContent = memo(({
                  <div><Waves className="inline h-4 w-4 mr-2 text-muted-foreground"/> Solar: {telemetry.solarPanelOutput?.toFixed(2)}W</div>
                  <div><Thermometer className="inline h-4 w-4 mr-2 text-blue-500"/> Ext Temp: {telemetry.externalTemperature?.toFixed(1)}°C</div>
                  <div><Navigation className="inline h-4 w-4 mr-2 text-muted-foreground"/> Gyro: ({telemetry.gyroscope?.x?.toFixed(2)}, {telemetry.gyroscope?.y?.toFixed(2)}, {telemetry.gyroscope?.z?.toFixed(2)})</div>
-                 <div><Cpu className="inline h-4 w-4 mr-2 text-muted-foreground"/> Mag: ({telemetry.magnetometer?.x?.toFixed(3)}, ...)</div> {/* Abbreviated Mag */}
+                 <div><Cpu className="inline h-4 w-4 mr-2 text-muted-foreground"/> Mag: ({telemetry.magnetometer?.x?.toFixed(3)}, {telemetry.magnetometer?.y?.toFixed(3)}, ...)</div> {/* Abbreviated Mag */}
                  <div><Mail className="inline h-4 w-4 mr-2 text-muted-foreground"/> Delay: {telemetry.communicationLogs?.packetDelay} ms</div>
                </div>
              </CardContent>
@@ -528,7 +543,7 @@ const HomeContent = memo(({
                            <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.8}/>
                            <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0}/>
                          </linearGradient>
-                         <linearGradient id="colorSignal" x1="0" y1="0" x2="0" y2="1">
+                          <linearGradient id="colorSignal" x1="0" y1="0" x2="0" y2="1">
                            <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.8}/>
                            <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0}/>
                          </linearGradient>
@@ -586,13 +601,17 @@ export default function Home() {
   const { selectedSatelliteId } = useSatellite();
   const [telemetry, setTelemetry] = useState<TelemetryData | null>(null);
   const [alerts, setAlerts] = useState<AlertInfo[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [telemetryError, setTelemetryError] = useState<string | null>(null); // Renamed state
   const [isLoadingTelemetry, setIsLoadingTelemetry] = useState(true);
   const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(null);
   const [isLoadingRiskScore, setIsLoadingRiskScore] = useState(false);
   const [riskScoreError, setRiskScoreError] = useState<string | null>(null);
   const [telemetryHistory, setTelemetryHistory] = useState<TelemetryData[]>([]);
   const [isClient, setIsClient] = useState(false); // Use this for client-side checks
+
+  // Direct usage of useSidebar here might still cause issues if Home isn't properly nested.
+  // Let's remove it from here and rely on AppSidebar/SidebarTrigger from layout.
+  // const { setOpenMobile } = useSidebar();
 
   useEffect(() => {
     setIsClient(true); // Component has mounted
@@ -603,7 +622,7 @@ export default function Home() {
     if (!selectedSatelliteId || !isClient) return; // Only run on client and if satellite selected
 
     setIsLoadingTelemetry(true);
-    setError(null);
+    setTelemetryError(null); // Use renamed state setter
     setTelemetry(null);
     setAlerts([]);
     setRiskScoreData(null);
@@ -615,24 +634,28 @@ export default function Home() {
       if (data) {
         setTelemetry(data);
         setAlerts(generateAlerts(data));
-        setTelemetryHistory(prev => [...prev, data].slice(-30));
-        // Auto-calculate risk score when new data arrives
-        // calculateRiskScore(data); // Consider if auto-calculation is desired
-        setError(null);
+        // Limit history to last 30 points
+        setTelemetryHistory(prev => [...prev.slice(-29), data]);
+        // Consider if auto-calculation is desired or keep manual trigger
+        // calculateRiskScore(data);
+        setTelemetryError(null); // Clear error on success
       } else {
-        setTelemetry(null);
-        setAlerts([]);
-        setTelemetryHistory([]);
+        // Handle case where data is null (e.g., initial load or temporary issue)
         console.warn(`No telemetry data received for ${selectedSatelliteId}.`);
+        // Optionally keep previous data/alerts or clear them
+        // setTelemetry(null);
+        // setAlerts([]);
+        // setTelemetryHistory([]);
       }
     }, (subError) => {
       console.error("Telemetry subscription error:", subError);
-      setError(`Failed to subscribe to telemetry for ${selectedSatelliteId}.`);
+      setTelemetryError(`Failed to subscribe to telemetry for ${selectedSatelliteId}.`); // Use renamed state setter
       setIsLoadingTelemetry(false);
+      // Clear potentially stale data on error
       setTelemetry(null);
       setAlerts([]);
       setTelemetryHistory([]);
-      setRiskScoreData(null);
+      setRiskScoreData(null); // Clear AI data too
       setRiskScoreError(null);
     });
 
@@ -644,11 +667,12 @@ export default function Home() {
   // Function to calculate risk score using AI (manual trigger)
   const calculateRiskScore = useCallback(async () => {
     if (!telemetry) {
-      setRiskScoreError("Cannot calculate risk score without telemetry data.");
+      setRiskScoreError("Cannot calculate risk score without current telemetry data.");
       setRiskScoreData(null);
       return;
     }
 
+    // Extract data needed for the AI flow
     const batteryLevel = Math.min(100, Math.max(0, Math.round(((telemetry.batteryVoltage - 3.5) / (4.2 - 3.5)) * 100)));
     const temperature = telemetry.internalTemperature;
     let communicationStatus: "stable" | "unstable" | "lost";
@@ -671,8 +695,22 @@ export default function Home() {
       });
       setRiskScoreData(result);
     } catch (aiError: any) {
-      console.error("Error calling getRiskScore AI flow:", aiError);
-      setRiskScoreError("AI Error: " + (aiError.message || "Failed to get risk score"));
+        console.error("Error calling getRiskScore AI flow:", aiError);
+        let errorMessage = "Failed to get risk score.";
+        if (aiError instanceof Error) {
+            errorMessage = aiError.message;
+        } else if (typeof aiError === 'string') {
+            errorMessage = aiError;
+        }
+
+        // Provide more specific error messages
+        if (errorMessage.includes('400 Bad Request') || errorMessage.includes('API key not valid')) {
+            setRiskScoreError("AI Error: Invalid API Key or bad request. Please check your .env configuration and Genkit setup.");
+        } else if (errorMessage.includes('429')) {
+             setRiskScoreError("AI Error: API Rate Limit Exceeded. Please try again later.");
+        } else {
+            setRiskScoreError(`AI Error: ${errorMessage}`);
+        }
       setRiskScoreData(null);
     } finally {
       setIsLoadingRiskScore(false);
@@ -685,33 +723,36 @@ export default function Home() {
      <>
        {/* Sidebar is rendered via layout */}
        <div className="flex-1">
-          {/* Header */}
+          {/* Header for mobile */}
           <header className="sticky top-0 z-10 flex h-[57px] items-center gap-1 border-b bg-background px-4 md:hidden">
+            {/* Ensure SidebarTrigger is only rendered client-side */}
             {isClient && <SidebarTrigger className="md:hidden"/>}
             <h1 className="text-xl font-semibold ml-2">CubeSense</h1>
              {/* Optional: Add SatelliteSelector or other controls here for mobile */}
+             {isClient && <div className="ml-auto"><SatelliteSelector /></div>}
           </header>
 
           {/* Page content */}
           <div className="p-4">
-             {/* Header with Satellite Selector and AI Explanation Button */}
-             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+             {/* Header with Satellite Selector and AI Explanation Button (Desktop) */}
+             <div className="hidden md:flex flex-wrap items-center justify-between gap-4 mb-4">
                <div className="flex items-center gap-2">
                  <h1 className="font-semibold text-2xl">
                     CubeSense Dashboard ({selectedSatelliteId})
                  </h1>
                </div>
                <div className="flex items-center gap-4">
+                  {/* Ensure SatelliteSelector and AnomalyExplanation are only rendered client-side */}
                   {isClient && <SatelliteSelector />}
                   {isClient && (
-                    <AnomalyExplanation
+                    <DynamicAnomalyExplanation
                       telemetry={telemetry}
                       satelliteId={selectedSatelliteId}
                     />
                   )}
                </div>
              </div>
-             <Separator className="my-4" />
+             <Separator className="my-4 hidden md:block" /> {/* Hide separator on mobile */}
 
              {/* Render the main content */}
               <HomeContent
@@ -722,7 +763,7 @@ export default function Home() {
                 isLoadingRiskScore={isLoadingRiskScore}
                 riskScoreError={riskScoreError}
                 isLoadingTelemetry={isLoadingTelemetry}
-                error={error}
+                telemetryError={telemetryError} // Pass renamed prop
                 selectedSatelliteId={selectedSatelliteId}
                 calculateRiskScore={calculateRiskScore} // Pass the function
               />
