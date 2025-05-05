@@ -6,14 +6,13 @@ import {z} from 'genkit';
 
 // --- explain-anomaly-score types ---
 
-export const ExplainAnomalyScoreInputSchema = z.object({
+// These are schemas used *within* the flows, not exported directly from the 'use server' file.
+const ExplainAnomalyScoreInputSchemaInternal = z.object({
   satelliteId: z.string().describe('The ID of the satellite to explain the anomaly score for.'),
-  // Telemetry data is now fetched by the tool within the flow
 });
-export type ExplainAnomalyScoreInput = z.infer<typeof ExplainAnomalyScoreInputSchema>;
+export type ExplainAnomalyScoreInput = z.infer<typeof ExplainAnomalyScoreInputSchemaInternal>;
 
-
-export const ExplainAnomalyScoreOutputSchema = z.object({
+const ExplainAnomalyScoreOutputSchemaInternal = z.object({
   explanation: z.string().describe('A detailed explanation of how the Anomaly Risk Score was calculated.'),
   breakdown: z.object({
     thermal: z.number().describe('The contribution of thermal factors to the risk score (0-100).'),
@@ -22,21 +21,24 @@ export const ExplainAnomalyScoreOutputSchema = z.object({
     orientation: z.number().describe('The contribution of orientation factors to the risk score (0-100).'),
   }).describe('A breakdown of the risk score by failure type.'),
 });
-export type ExplainAnomalyScoreOutput = z.infer<typeof ExplainAnomalyScoreOutputSchema>;
+export type ExplainAnomalyScoreOutput = z.infer<typeof ExplainAnomalyScoreOutputSchemaInternal>;
 
 
 // --- get-risk-score types ---
 
-export const GetRiskScoreInputSchema = z.object({
+const GetRiskScoreInputSchemaInternal = z.object({
   batteryLevel: z.number().describe('Battery level in percentage (0-100).'),
   temperature: z.number().describe('Temperature in degrees Celsius.'),
   communicationStatus: z.enum(['stable', 'unstable', 'lost']).describe('Communication status.'),
 });
-export type GetRiskScoreInput = z.infer<typeof GetRiskScoreInputSchema>;
+export type GetRiskScoreInput = z.infer<typeof GetRiskScoreInputSchemaInternal>;
 
-
-export const GetRiskScoreOutputSchema = z.object({
+const GetRiskScoreOutputSchemaInternal = z.object({
   riskScore: z.number().describe('The calculated risk score (0-100).'),
   explanation: z.string().describe('Explanation of the risk score calculation.'),
 });
-export type GetRiskScoreOutput = z.infer<typeof GetRiskScoreOutputSchema>;
+export type GetRiskScoreOutput = z.infer<typeof GetRiskScoreOutputSchemaInternal>;
+
+// Export only the types, not the Zod schemas themselves,
+// as Zod schemas are runtime objects and violate the 'use server' export rules.
+// The flows themselves import these types.

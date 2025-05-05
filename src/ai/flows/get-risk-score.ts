@@ -4,16 +4,17 @@
  *
  * - getRiskScore - A function that calculates the risk score.
  */
-
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
-import type { GetRiskScoreInput, GetRiskScoreOutput } from '@/ai/types'; // Import types
+import type {GetRiskScoreInput, GetRiskScoreOutput} from '@/ai/types'; // Import types
 
 // Define schemas locally for runtime validation
 const GetRiskScoreInputSchema = z.object({
   batteryLevel: z.number().describe('Battery level in percentage (0-100).'),
   temperature: z.number().describe('Temperature in degrees Celsius.'),
-  communicationStatus: z.enum(['stable', 'unstable', 'lost']).describe('Communication status.'),
+  communicationStatus: z
+    .enum(['stable', 'unstable', 'lost'])
+    .describe('Communication status.'),
 });
 
 const GetRiskScoreOutputSchema = z.object({
@@ -21,24 +22,39 @@ const GetRiskScoreOutputSchema = z.object({
   explanation: z.string().describe('Explanation of the risk score calculation.'),
 });
 
-
-export async function getRiskScore(input: GetRiskScoreInput): Promise<GetRiskScoreOutput> {
-  return getRiskScoreFlow(input);
+// Exported wrapper function remains async
+export async function getRiskScore(
+  input: GetRiskScoreInput
+): Promise<GetRiskScoreOutput> {
+   console.log("Calling getRiskScoreFlow with input:", input);
+  try {
+    const result = await getRiskScoreFlow(input);
+     console.log("getRiskScoreFlow returned:", result);
+    return result;
+  } catch (error) {
+    console.error('Error executing getRiskScoreFlow:', error);
+    // Rethrow a more specific error or a structured error object
+    if (error instanceof Error) {
+       // Check for specific API key errors
+       if (error.message.includes("API key not valid")) {
+           throw new Error("AI Error: Invalid API Key. Please check configuration.");
+       }
+       throw new Error(`Failed to calculate risk score: ${error.message}`);
+    } else {
+       throw new Error('Failed to calculate risk score due to an unknown error.');
+    }
+  }
 }
 
 const prompt = ai.definePrompt({
   name: 'getRiskScorePrompt',
   input: {
-    schema: z.object({ // Use the local schema definition
-      batteryLevel: z.number().describe('Battery level in percentage (0-100).'),
-      temperature: z.number().describe('Temperature in degrees Celsius.'),
-      communicationStatus: z.string().describe('Communication status (stable, unstable, lost).'),
-    }),
+    schema: GetRiskScoreInputSchema, // Use the local schema definition
   },
   output: {
     schema: GetRiskScoreOutputSchema, // Use the local schema definition
   },
-  prompt: `You are an expert in assessing risk based on telemetry data.
+  prompt: `You are an expert in assessing risk based on telemetry data for CubeSats.
 
 Given the following telemetry data, calculate a risk score between 0 and 100,
 where 0 indicates no risk and 100 indicates maximum risk. Also, provide a brief explanation of how you arrived at the risk score.
@@ -48,12 +64,12 @@ Telemetry Data:
 - Temperature: {{temperature}}°C
 - Communication Status: {{communicationStatus}}
 
-Consider the following factors:
-- Low battery level increases the risk.
-- Extreme temperatures (high or low) increase the risk.
-- Unstable or lost communication significantly increases the risk.
+Consider the following factors carefully:
+- Low battery level (< 20%) significantly increases the risk.
+- Very high (> 40°C) or very low (< -10°C) temperatures increase the risk.
+- Unstable or lost communication significantly increases the risk. 'Lost' status represents the highest communication risk.
 
-Provide the risk score and explanation.`, // Simplified instruction, rely on output schema
+Output the risk score and a concise explanation based ONLY on the provided data and risk factors.`,
 });
 
 const getRiskScoreFlow = ai.defineFlow<
@@ -65,15 +81,47 @@ const getRiskScoreFlow = ai.defineFlow<
     inputSchema: GetRiskScoreInputSchema, // Use local schema
     outputSchema: GetRiskScoreOutputSchema, // Use local schema
   },
-  async input => {
-    const {output} = await prompt(input);
+  async (input) => {
+    console.log('Executing getRiskScoreFlow with input:', input);
+    try {
+      const {output} = await prompt(input); // Correctly destructure output
+      console.log('AI prompt result:', output); // Log the output directly
 
-    // Add robust check for output
-    if (!output) {
-        console.error("AI prompt did not return a valid output for getRiskScoreFlow.");
-        // Consider throwing a more specific error or returning a default/error state
-        throw new Error("Failed to calculate risk score due to missing AI output.");
+      // Add robust check for output and structure
+      if (!output) {
+        console.error(
+          'AI prompt did not return a valid output structure for getRiskScoreFlow.'
+        );
+        throw new Error(
+          'AI response was missing or empty.'
+        );
+      }
+
+      // Validate the output against the schema (Genkit might do this implicitly, but explicit check adds safety)
+      const validation = GetRiskScoreOutputSchema.safeParse(output);
+      if (!validation.success) {
+          console.error("AI output failed schema validation:", validation.error);
+          throw new Error(`AI response did not match expected format: ${validation.error.message}`);
+      }
+
+
+      console.log('getRiskScoreFlow successfully generated output:', output);
+      return output; // Already validated
+    } catch (error) {
+      console.error('Error within getRiskScoreFlow execution:', error);
+      // Log the specific error from the prompt call if possible
+       if (error instanceof Error) {
+           // Check for specific API key errors
+           if (error.message.includes("API key not valid")) {
+               throw new Error("AI Error: Invalid API Key. Please check configuration.");
+           }
+           throw new Error(`AI prompt failed: ${error.message}`);
+       } else {
+           throw new Error('An unknown error occurred during AI processing.');
+       }
     }
-    return output;
   }
 );
+
+// Make sure only the wrapper function and types are intended for export if using modules
+// (The 'export' keyword handles this)
