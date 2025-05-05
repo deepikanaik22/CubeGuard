@@ -19,31 +19,39 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
-    // allowedDevOrigins is deprecated, use cors instead if needed, but likely not necessary for this error
-    // allowedDevOrigins: ['3001-idx-studio-1745413977913.cluster-zkm2jrwbnbd4awuedc2alqxrpk.cloudworkstations.dev'],
-    serverComponentsExternalPackages: ['@opentelemetry/sdk-trace-node'], // Hint for Next.js bundler
+    // Ensure serverComponentsExternalPackages includes packages needed by Genkit/Telemetry
+    serverComponentsExternalPackages: ['@opentelemetry/sdk-trace-node'], // Keep existing if still needed
   },
-  // Add webpack configuration to handle 'async_hooks'
-  webpack: (config, { isServer }) => {
-    // Exclude 'async_hooks' from the client bundle
+  // Add webpack configuration to handle 'async_hooks' and other Node.js modules
+  webpack: (config, { isServer, webpack }) => {
+    // Ensure experiments.topLevelAwait is enabled for potential async operations during module loading
+    config.experiments = { ...config.experiments, topLevelAwait: true };
+
+    // Provide fallbacks for Node.js core modules that might be imported
+    // by dependencies but are not available in the browser environment.
     if (!isServer) {
-      config.externals = config.externals || [];
-      if (Array.isArray(config.externals)) {
-         // Add async_hooks as external for client-side builds
-        config.externals.push('async_hooks');
-      } else if (typeof config.externals === 'object') {
-         // Handle object externals if necessary, though array is common
-        (config.externals as Record<string, any>)['async_hooks'] = 'var {}'; // Provide an empty object mock
-      }
-      // You might also need to provide fallbacks for other Node.js modules if errors occur
       config.resolve.fallback = {
         ...(config.resolve.fallback || {}),
         'async_hooks': false, // Explicitly tell webpack not to resolve this module on the client
-        'fs': false,
-        'net': false,
-        'tls': false,
+        'fs': false,          // Example: Exclude 'fs' if needed
+        'net': false,         // Example: Exclude 'net' if needed
+        'tls': false,         // Example: Exclude 'tls' if needed
+        // Add other Node.js modules here if they cause issues
       };
     }
+
+    // This part might be necessary if 'async_hooks' is somehow still being
+    // processed despite the fallback. It defines 'async_hooks' as an external
+    // module that won't be bundled.
+    // config.externals = config.externals || [];
+    // if (!isServer) {
+    //   if (Array.isArray(config.externals)) {
+    //     config.externals.push('async_hooks');
+    //   } else {
+    //      // Handle object externals if necessary
+    //      (config.externals as Record<string, any>)['async_hooks'] = 'var {}';
+    //   }
+    // }
 
     // Important: return the modified config
     return config;
