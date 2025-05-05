@@ -1,7 +1,8 @@
-'use server'; // Add 'use server' directive for server-side execution
+'use server'; // Mark this module explicitly as server-only
 
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
+import {TelemetryData} from '@/services/telemetry'; // Import TelemetryData for schema
 
 // --- Enhanced API Key Logging ---
 const apiKey = process.env.GOOGLE_GENAI_API_KEY;
@@ -16,8 +17,12 @@ if (apiKey) {
 }
 // --- End Enhanced Logging ---
 
+
+// Define the ai instance. This should NOT be marked 'use server' itself.
+// Updated: Removed 'use client' and added 'use server' at the top
+// This module should only be imported by server components or server actions ('use server' files)
 export const ai = genkit({
-  promptDir: './prompts',
+  promptDir: './prompts', // Note: This might need adjustment if prompts are stored elsewhere
   plugins: [
     googleAI({
       // Explicitly pass the apiKey variable read from process.env
@@ -25,7 +30,7 @@ export const ai = genkit({
     }),
   ],
   // Ensure this model is available in your Google Cloud project and enabled for the API key
-  model: 'googleai/gemini-2.0-flash',
+  // model: 'googleai/gemini-2.0-flash', // Default model if not specified in flows/prompts
   // Add detailed logging within Genkit itself if possible/needed
   // logLevel: 'debug', // Uncomment for more verbose Genkit logs
 });
