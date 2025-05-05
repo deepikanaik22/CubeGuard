@@ -1,4 +1,5 @@
 'use client';
+
 import dynamic from 'next/dynamic';
 import {
   Sidebar,
@@ -13,7 +14,7 @@ import {
   SidebarProvider,
   useSidebar
 } from "@/components/ui/sidebar";
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
+import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'; // Added CardDescription
 import {
   Battery,
   Thermometer,
@@ -92,7 +93,7 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-        {/* Changed <p> to <div> to fix hydration error */}
+         {/* Changed <p> to <div> to fix hydration error */}
         <div className="text-2xl font-bold">
           {isClient ? (
             isLoading ? (
@@ -102,7 +103,7 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
             ) : error ? ( // Show N/A if error occurred
                 'N/A'
             ) : (
-                'Awaiting calculation...' // Default state before calculation or if no data
+                'Awaiting telemetry...' // Default state before calculation or if no data
             )
           ) : (
             <Skeleton className="h-8 w-1/2" /> // Skeleton for SSR/initial load
@@ -117,7 +118,7 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
             ) : riskScoreData ? (
               riskScoreData.explanation
             ) : (
-              'Click button to calculate risk.'
+              'Click button to calculate risk using current telemetry.'
             )
           ) : (
             <Skeleton className="h-4 w-3/4 mt-1" /> // Skeleton for SSR/initial load
@@ -196,17 +197,21 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
       }
     }, [satelliteId]); // Dependency is only satelliteId
 
+    // Ensure DialogTrigger and Button are only rendered client-side
+    if (!isClient) {
+      return <Button variant="outline" disabled>Loading...</Button>;
+    }
+
     return (
       <Dialog>
         <DialogTrigger asChild>
-          {/* Ensure button is only interactive on client */}
-          <Button
-             onClick={() => { if (isClient) fetchAnomalyExplanation(); }}
-            disabled={!isClient || isLoadingAnomaly}
-            variant="outline"
-          >
-            {isLoadingAnomaly ? 'Loading Explanation...' : 'Get Anomaly Explanation'}
-          </Button>
+           <Button
+              onClick={fetchAnomalyExplanation}
+             disabled={isLoadingAnomaly}
+             variant="outline"
+           >
+             {isLoadingAnomaly ? 'Loading Explanation...' : 'Get Anomaly Explanation'}
+           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -268,10 +273,6 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
 );
 AnomalyExplanation.displayName = 'AnomalyExplanation';
 
-// const DynamicAnomalyExplanation = dynamic(
-//   () => Promise.resolve(AnomalyExplanation), // Use Promise.resolve for memo component
-//   {ssr: false}
-// );
 // Wrapper component for client-side only rendering
 const ClientOnlyAnomalyExplanation = (props: AnomalyExplanationProps) => {
   const [isClient, setIsClient] = useState(false);
@@ -341,6 +342,7 @@ function HomeContent({
             </h1>
           </div>
            <div className="flex items-center gap-4">
+             {/* Conditional render anomaly explanation button */}
              {isClient && <ClientOnlyAnomalyExplanation satelliteId={selectedSatelliteId || ''} />}
            </div>
         </div>
@@ -368,37 +370,52 @@ function HomeContent({
                 Battery (%)
               </Label>
               {/* Use Input, but make it readOnly */}
-              <Input
-                type="number"
-                id="battery-level-display"
-                value={!isClient || telemetry === null ? '' : batteryLevel} // Show empty during SSR/loading
-                readOnly
-                className="w-20"
-              />
+               {/* Conditionally render Input based on isClient */}
+              {isClient ? (
+                  <Input
+                    type="number"
+                    id="battery-level-display"
+                    value={telemetry === null ? '' : batteryLevel}
+                    readOnly
+                    className="w-20"
+                  />
+              ) : (
+                 <Skeleton className="h-10 w-20" />
+              )}
             </div>
             <div className="flex items-center space-x-2">
               <Label htmlFor="temperature-display" className="min-w-[100px]">
                 Temperature (°C)
               </Label>
-              <Input
-                type="number"
-                id="temperature-display"
-                value={!isClient || telemetry === null ? '' : temperature} // Show empty during SSR/loading
-                readOnly
-                className="w-20"
-              />
+               {/* Conditionally render Input based on isClient */}
+              {isClient ? (
+                  <Input
+                    type="number"
+                    id="temperature-display"
+                    value={telemetry === null ? '' : temperature}
+                    readOnly
+                    className="w-20"
+                  />
+               ) : (
+                  <Skeleton className="h-10 w-20" />
+               )}
             </div>
             <div className="flex items-center space-x-2">
               <Label htmlFor="comm-status-display" className="min-w-[100px]">
                 Comm Status
               </Label>
-              <Input
-                 type="text"
-                 id="comm-status-display"
-                 value={!isClient || telemetry === null ? 'Loading...' : communicationStatus} // Show loading during SSR
-                 readOnly
-                 className="w-[180px]"
-              />
+               {/* Conditionally render Input based on isClient */}
+               {isClient ? (
+                  <Input
+                     type="text"
+                     id="comm-status-display"
+                     value={telemetry === null ? 'Loading...' : communicationStatus}
+                     readOnly
+                     className="w-[180px]"
+                  />
+                ) : (
+                   <Skeleton className="h-10 w-[180px]" />
+                )}
             </div>
           </CardContent>
         </Card>
