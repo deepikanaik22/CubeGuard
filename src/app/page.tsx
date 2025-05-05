@@ -10,8 +10,9 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarSeparator,
-  useSidebar,
-} from '@/components/ui/sidebar';
+  SidebarProvider,
+  useSidebar
+} from "@/components/ui/sidebar";
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {
   Battery,
@@ -23,7 +24,7 @@ import {
   Cpu,
   Rocket, // Added Rocket icon
 } from 'lucide-react';
-import {getTelemetryData, TelemetryData} from '@/services/telemetry'; // Using simulated source now
+import { getTelemetryData, TelemetryData, subscribeToTelemetryData } from '@/services/telemetry'; // Using simulated source now
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
 import {Badge} from '@/components/ui/badge';
 import {
@@ -91,7 +92,8 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
-        <p className="text-2xl font-bold">
+        {/* Changed <p> to <div> to fix hydration error */}
+        <div className="text-2xl font-bold">
           {isClient ? (
             isLoading ? (
               'Calculating...'
@@ -100,13 +102,13 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
             ) : error ? ( // Show N/A if error occurred
                 'N/A'
             ) : (
-                'N/A' // Default N/A before calculation
+                'Awaiting calculation...' // Default state before calculation or if no data
             )
           ) : (
-            <Skeleton className="h-8 w-1/2" />
+            <Skeleton className="h-8 w-1/2" /> // Skeleton for SSR/initial load
           )}
-        </p>
-        <p className="text-sm text-muted-foreground">
+        </div>
+        <p className="text-sm text-muted-foreground mt-1">
           {isClient ? (
             isLoading ? (
               'AI analyzing risk...'
@@ -118,7 +120,7 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
               'Click button to calculate risk.'
             )
           ) : (
-            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-3/4 mt-1" /> // Skeleton for SSR/initial load
           )}
         </p>
         {isClient && ( // Only render button on client
@@ -135,6 +137,7 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
   }
 );
 RiskScoreDisplay.displayName = 'RiskScoreDisplay';
+
 
 interface AnomalyExplanationProps {
   satelliteId: string; // Pass satelliteId only
@@ -198,7 +201,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
         <DialogTrigger asChild>
           {/* Ensure button is only interactive on client */}
           <Button
-            onClick={isClient ? fetchAnomalyExplanation : undefined}
+             onClick={() => { if (isClient) fetchAnomalyExplanation(); }}
             disabled={!isClient || isLoadingAnomaly}
             variant="outline"
           >
@@ -265,31 +268,54 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
 );
 AnomalyExplanation.displayName = 'AnomalyExplanation';
 
-const DynamicAnomalyExplanation = dynamic(
-  () => Promise.resolve(AnomalyExplanation),
-  {ssr: false}
-);
+// const DynamicAnomalyExplanation = dynamic(
+//   () => Promise.resolve(AnomalyExplanation), // Use Promise.resolve for memo component
+//   {ssr: false}
+// );
+// Wrapper component for client-side only rendering
+const ClientOnlyAnomalyExplanation = (props: AnomalyExplanationProps) => {
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    // Render a placeholder or skeleton during SSR/initial load
+    return <Button variant="outline" disabled>Loading Explanation...</Button>;
+  }
+
+  return <AnomalyExplanation {...props} />;
+};
+
 
 // Component to display the main content area
 function HomeContent({
   batteryLevel,
   temperature,
   communicationStatus,
-  handleBatteryLevelChange, // Pass handlers
-  handleTemperatureChange,
-  handleCommunicationStatusChange,
   riskScoreData,
+  riskScoreLoading, // Pass down loading state
+  riskScoreError,   // Pass down error state
   telemetry,
-  error,
+  telemetryError, // Renamed from error to avoid confusion
   calculateRiskScore,
-}: any) {
+}: {
+  batteryLevel: number;
+  temperature: number;
+  communicationStatus: string;
+  riskScoreData: GetRiskScoreOutput | null;
+  riskScoreLoading: boolean;
+  riskScoreError: string | null;
+  telemetry: TelemetryData | null;
+  telemetryError: string | null;
+  calculateRiskScore: () => void;
+}) {
   const { selectedSatelliteId } = useSatellite(); // Get satellite ID here
-   const [isClient, setIsClient] = useState(false); // Client-side check
+  const [isClient, setIsClient] = useState(false); // Client-side check
 
   useEffect(() => {
     setIsClient(true); // Component has mounted
   }, []);
-
 
   return (
     <>
@@ -298,7 +324,7 @@ function HomeContent({
         {isClient && <SidebarTrigger className="md:hidden" />} {/* Conditionally render based on isClient */}
         <h1 className="text-xl font-semibold ml-2">CubeSense</h1>
         <div className="ml-auto">
-          <SatelliteSelector />
+          {isClient && <SatelliteSelector />}
         </div>
       </header>
 
@@ -308,92 +334,87 @@ function HomeContent({
         {/* Added padding for spacing */}
         {/* Desktop Header */}
         <div className="hidden md:flex flex-wrap items-center justify-between gap-4 mb-4">
-          <div className="flex items-center gap-2">
+           <div className="flex items-center gap-2">
+            <Rocket className="h-6 w-6 text-primary" />
             <h1 className="font-semibold text-2xl">
               CubeSense Dashboard ({selectedSatelliteId || '...'}){' '}
-              {/* Display selected satellite ID */}
             </h1>
           </div>
-          <div className="flex items-center gap-4">
-            {/* Use SatelliteSelector on Desktop */}
-            {/* Use DynamicAnomalyExplanation */}
-            <DynamicAnomalyExplanation
-              satelliteId={selectedSatelliteId || ''} // Pass satellite ID
-            />
-          </div>
+           <div className="flex items-center gap-4">
+             {isClient && <ClientOnlyAnomalyExplanation satelliteId={selectedSatelliteId || ''} />}
+           </div>
         </div>
         <Separator className="my-4 hidden md:block" />
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        {/* Simulation Input Area - Now Read Only */}
+
+         {/* Show telemetry error if present */}
+         {telemetryError && (
+           <Alert variant="destructive" className="mb-4">
+             <AlertTriangle className="h-4 w-4" />
+             <AlertTitle>Telemetry Error</AlertTitle>
+             <AlertDescription>{telemetryError}</AlertDescription>
+           </Alert>
+         )}
+
+
+        {/* Telemetry Snapshot Area */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Live Telemetry Snapshot</CardTitle>
+            <CardDescription>Latest data received from {selectedSatelliteId || '...'}.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex items-center space-x-2">
-              <Label htmlFor="battery-level" className="min-w-[100px]">
+              <Label htmlFor="battery-level-display" className="min-w-[100px]">
                 Battery (%)
               </Label>
+              {/* Use Input, but make it readOnly */}
               <Input
                 type="number"
-                id="battery-level"
-                value={batteryLevel}
-                readOnly // Make read-only
+                id="battery-level-display"
+                value={!isClient || telemetry === null ? '' : batteryLevel} // Show empty during SSR/loading
+                readOnly
                 className="w-20"
               />
             </div>
             <div className="flex items-center space-x-2">
-              <Label htmlFor="temperature" className="min-w-[100px]">
+              <Label htmlFor="temperature-display" className="min-w-[100px]">
                 Temperature (°C)
               </Label>
               <Input
                 type="number"
-                id="temperature"
-                value={temperature}
-                readOnly // Make read-only
+                id="temperature-display"
+                value={!isClient || telemetry === null ? '' : temperature} // Show empty during SSR/loading
+                readOnly
                 className="w-20"
               />
             </div>
             <div className="flex items-center space-x-2">
-              <Label htmlFor="comm-status" className="min-w-[100px]">
+              <Label htmlFor="comm-status-display" className="min-w-[100px]">
                 Comm Status
               </Label>
-               {/* Keep Select, but disable interaction if needed, or just display text */}
-               <Input
+              <Input
                  type="text"
                  id="comm-status-display"
-                 value={communicationStatus}
+                 value={!isClient || telemetry === null ? 'Loading...' : communicationStatus} // Show loading during SSR
                  readOnly
                  className="w-[180px]"
-               />
-              {/* <Select value={communicationStatus} onValueChange={handleCommunicationStatusChange} disabled>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="stable">Stable</SelectItem>
-                  <SelectItem value="unstable">Unstable</SelectItem>
-                  <SelectItem value="lost">Lost</SelectItem>
-                </SelectContent>
-              </Select> */}
+              />
             </div>
           </CardContent>
         </Card>
+
+        {/* AI Risk Score Card */}
         <Card>
           <CardHeader>
             <CardTitle>AI Anomaly Risk Score</CardTitle>
+             <CardDescription>Calculated based on the latest telemetry snapshot.</CardDescription>
           </CardHeader>
           <CardContent>
+             {/* Pass loading and error states down */}
             <RiskScoreDisplay
               riskScoreData={riskScoreData}
-              isLoading={false} // Let RiskScoreDisplay manage its own loading if needed
-              error={null} // Pass specific risk score error if available
+              isLoading={riskScoreLoading}
+              error={riskScoreError}
               calculateRiskScore={calculateRiskScore}
             />
           </CardContent>
@@ -403,7 +424,9 @@ function HomeContent({
   );
 }
 
-export default function Home() {
+
+// Renamed original Home component to HomeContainer
+function HomeContainer() {
   const router = useRouter();
   const {selectedSatelliteId} = useSatellite(); // Use context
 
@@ -423,38 +446,60 @@ export default function Home() {
 
   // General Error State (for telemetry fetching)
   const [telemetryError, setTelemetryError] = useState<string | null>(null);
+   const [isClient, setIsClient] = useState(false); // Client-side check
+
+    useEffect(() => {
+      setIsClient(true); // Component has mounted
+    }, []);
 
 
   // Fetch and update telemetry data based on subscription
   useEffect(() => {
-    if (!selectedSatelliteId) return;
+    if (!selectedSatelliteId || !isClient) return; // Only run on client with satelliteId
 
     setTelemetryError(null); // Clear previous errors
     setCurrentTelemetry(null); // Clear old data
     setDisplayBatteryLevel(0); // Reset display values
     setDisplayTemperature(0);
     setDisplayCommStatus('N/A');
+    setRiskScoreData(null); // Clear old risk score when satellite changes
+    setRiskScoreError(null);
 
 
     console.log(`Subscribing to telemetry for ${selectedSatelliteId}`);
     const unsubscribe = subscribeToTelemetryData(
       selectedSatelliteId,
       (data) => {
-         console.log(`Received telemetry update for ${selectedSatelliteId}:`, data?.timestamp);
+         // console.log(`Received telemetry update for ${selectedSatelliteId}:`, data?.timestamp);
         setCurrentTelemetry(data);
         setTelemetryError(null); // Clear error on successful update
 
         // Update display values based on new data
          if (data) {
-            setDisplayBatteryLevel(Math.min(100, Math.max(0, Math.round(((data.batteryVoltage - 3.5) / (4.2 - 3.5)) * 100))));
-            setDisplayTemperature(data.internalTemperature);
-            if (data.communicationLogs?.signalStrength >= -85) {
-              setDisplayCommStatus("stable");
-            } else if (data.communicationLogs?.signalStrength >= -95) { // Adjusted threshold
-              setDisplayCommStatus("unstable");
-            } else {
-              setDisplayCommStatus("lost");
+            // More robust battery calculation (ensure no division by zero or NaN)
+            const voltage = data.batteryVoltage;
+            const minVoltage = 3.5;
+            const maxVoltage = 4.2;
+            const range = maxVoltage - minVoltage;
+            let batteryPercent = 0;
+            if (range > 0) {
+                batteryPercent = Math.min(100, Math.max(0, Math.round(((voltage - minVoltage) / range) * 100)));
             }
+            setDisplayBatteryLevel(batteryPercent);
+
+            setDisplayTemperature(data.internalTemperature);
+
+            // Determine Comm Status based on Signal Strength
+             const signalStrength = data.communicationLogs?.signalStrength;
+             if (signalStrength == null) {
+                setDisplayCommStatus('Unknown');
+             } else if (signalStrength >= -85) {
+               setDisplayCommStatus("stable");
+             } else if (signalStrength >= -95) {
+               setDisplayCommStatus("unstable");
+             } else {
+               setDisplayCommStatus("lost");
+             }
          } else {
              // Handle case where data is null (e.g., initial load or error)
              setDisplayBatteryLevel(0);
@@ -462,7 +507,7 @@ export default function Home() {
              setDisplayCommStatus('N/A');
               console.warn(`Received null telemetry data for ${selectedSatelliteId}`);
               // Optionally set an error or warning state here
-              // setTelemetryError("No telemetry data available.");
+              setTelemetryError("No telemetry data currently available.");
          }
       },
       (error) => {
@@ -485,11 +530,13 @@ export default function Home() {
       console.log(`Unsubscribing from telemetry for ${selectedSatelliteId}`);
       unsubscribe();
     };
-  }, [selectedSatelliteId]); // Re-subscribe when satellite ID changes
+  }, [selectedSatelliteId, isClient]); // Re-subscribe when satellite ID or client status changes
 
 
   // Function to calculate risk score using latest display values
   const calculateRiskScore = useCallback(async () => {
+     if (!isClient) return; // Don't run on server
+
      setRiskScoreLoading(true);
      setRiskScoreError(null);
      setRiskScoreData(null); // Clear previous score
@@ -499,7 +546,10 @@ export default function Home() {
        const inputData = {
            batteryLevel: displayBatteryLevel,
            temperature: displayTemperature,
-           communicationStatus: displayCommStatus as "stable" | "unstable" | "lost", // Cast status
+           // Ensure communicationStatus is one of the allowed enum values
+           communicationStatus: ["stable", "unstable", "lost"].includes(displayCommStatus)
+                                ? displayCommStatus as "stable" | "unstable" | "lost"
+                                : "unstable", // Default to unstable if status is unexpected
        };
         console.log("Calculating risk score with input:", inputData);
         const riskScore = await getRiskScore(inputData);
@@ -513,12 +563,33 @@ export default function Home() {
          } else if (typeof error === 'string') {
              message = error;
          }
-        setRiskScoreError(`Risk Score Error: ${message}`);
+         // Add specific error handling for API key issues
+         if (message.includes("API key not valid") || message.includes("Invalid API Key")) {
+            setRiskScoreError("AI Error: Invalid API Key. Please check configuration.");
+         } else {
+            setRiskScoreError(`AI Error: ${message}`);
+         }
     } finally {
        setRiskScoreLoading(false);
     }
-  }, [displayBatteryLevel, displayTemperature, displayCommStatus]); // Depend on display values
+  }, [displayBatteryLevel, displayTemperature, displayCommStatus, isClient]); // Depend on display values and client status
 
+  // Render HomeContent only on the client to avoid hydration issues with client-side state
+  if (!isClient) {
+      // Optionally render a loading skeleton or null during SSR
+      return (
+          <div className="flex min-h-screen">
+               <div className="flex-1 p-4">
+                  <Skeleton className="h-8 w-1/2 mb-4" />
+                  <Separator className="my-4"/>
+                   <div className="grid gap-6">
+                      <Skeleton className="h-40 w-full" />
+                      <Skeleton className="h-40 w-full" />
+                   </div>
+               </div>
+          </div>
+      );
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -529,16 +600,17 @@ export default function Home() {
           batteryLevel={displayBatteryLevel}
           temperature={displayTemperature}
           communicationStatus={displayCommStatus}
-          // Pass dummy handlers if needed, or remove if inputs are read-only
-          handleBatteryLevelChange={() => {}}
-          handleTemperatureChange={() => {}}
-          handleCommunicationStatusChange={() => {}}
           riskScoreData={riskScoreData}
-          telemetry={currentTelemetry} // Pass the raw telemetry if needed elsewhere
-          error={telemetryError} // Pass telemetry fetching error
+          riskScoreLoading={riskScoreLoading}
+          riskScoreError={riskScoreError}
+          telemetry={currentTelemetry}
+          telemetryError={telemetryError}
           calculateRiskScore={calculateRiskScore}
         />
       </div>
     </div>
   );
 }
+
+// Export the container component as default
+export default HomeContainer;
