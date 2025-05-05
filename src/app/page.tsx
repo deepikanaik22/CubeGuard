@@ -299,19 +299,10 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
 AnomalyExplanation.displayName = 'AnomalyExplanation';
 
 // Wrapper component for client-side only rendering
-const ClientOnlyAnomalyExplanation = (props: AnomalyExplanationProps) => {
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  if (!isClient) {
-    // Render a placeholder or skeleton during SSR/initial load
-    return <Button variant="outline" disabled>Loading Explanation...</Button>;
-  }
-
-  return <AnomalyExplanation {...props} />;
-};
+const ClientOnlyAnomalyExplanation = dynamic(() => Promise.resolve(AnomalyExplanation), {
+  ssr: false,
+  loading: () => <Button variant="outline" disabled>Loading Explanation...</Button>, // Optional loading state
+});
 
 
 // Component to display the main content area
@@ -439,7 +430,7 @@ function HomeContent({
                      className="w-auto flex-1" // Use flex-1 to allow it to take available space, remove fixed width
                   />
                 ) : (
-                   <Skeleton className="h-10 w-[180px]" />
+                   <Skeleton className="h-10 flex-1" /> // Use flex-1 for skeleton as well
                 )}
             </div>
           </CardContent>
@@ -610,10 +601,11 @@ export default function HomeContainer() {
              try {
                  errorData = await response.json();
              } catch (e) {
-                  // If JSON parsing fails, use the raw text of the response
-                 errorData = await response.text();
+                 // If JSON parsing fails, use the raw text of the response
+                  errorData = await response.text();
                  // Check if it looks like an HTML error page
                  if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
+                     console.error("Server returned HTML instead of JSON:", errorData.substring(0, 500) + "..."); // Log a snippet
                       throw new Error(`Server returned an HTML error page (Status: ${response.status})`);
                  }
              }
