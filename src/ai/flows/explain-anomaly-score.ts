@@ -75,17 +75,17 @@ const getTelemetryDataTool = ai.defineTool(
     }),
   },
   async (input) => {
-    console.log('[getTelemetryDataTool] Executing for satellite:', input.satelliteId);
+    console.log(`[getTelemetryDataTool] Executing for satellite: ${input.satelliteId}`);
     try {
       const data = await getTelemetryData(input.satelliteId);
       if (!data) {
         console.warn(`[getTelemetryDataTool] No telemetry data found for satellite ${input.satelliteId}`);
-        // Decide if throwing an error or returning null/empty state is better
+        // Throw a specific error if data is not found
         throw new Error(
-          `Telemetry data not found for satellite ${input.satelliteId}`
+          `Telemetry data not found for satellite ${input.satelliteId}. Cannot generate explanation.`
         );
       }
-       console.log(`[getTelemetryDataTool] Telemetry data retrieved successfully for ${input.satelliteId} at ${data.timestamp}`);
+       console.log(`[getTelemetryDataTool] Telemetry data retrieved for ${input.satelliteId} at ${data.timestamp?.toISOString()}`);
       // Ensure the returned data matches the tool's outputSchema
       // Convert timestamp to Date if it's not already (e.g., from Firestore Timestamp)
       const validatedData = {
@@ -95,17 +95,21 @@ const getTelemetryDataTool = ai.defineTool(
        // Optional: Validate against schema before returning
       const validation = getTelemetryDataTool.outputSchema.safeParse(validatedData);
        if (!validation.success) {
-         console.error("[getTelemetryDataTool] Output validation failed:", validation.error.flatten());
+         console.error("[getTelemetryDataTool] Output validation failed:", JSON.stringify(validation.error.flatten(), null, 2));
          // Decide how to handle validation failure - throw or return sanitized data
          throw new Error("[getTelemetryDataTool] Failed to return data in the expected format.");
        }
-       console.log("[getTelemetryDataTool] Returning validated data:", validation.data);
+       console.log("[getTelemetryDataTool] Returning validated data for", input.satelliteId);
       return validation.data; // Return validated data
     } catch (error) {
-        console.error(`[getTelemetryDataTool] Error for ${input.satelliteId}:`, error);
+        console.error(`[getTelemetryDataTool] Error fetching data for ${input.satelliteId}:`, error);
          if (error instanceof Error) {
+           console.error(`[getTelemetryDataTool] Error Stack for ${input.satelliteId}:`, error.stack);
+           // Re-throw the original error to be caught by the flow
            throw new Error(`[getTelemetryDataTool] Failed to retrieve telemetry data: ${error.message}`);
          } else {
+            // Handle non-Error objects
+            console.error('[getTelemetryDataTool] An unknown error object was thrown:', error);
             throw new Error('[getTelemetryDataTool] An unknown error occurred while retrieving telemetry data.');
          }
     }
@@ -116,18 +120,20 @@ const getTelemetryDataTool = ai.defineTool(
 export async function explainAnomalyScore(
   input: ExplainAnomalyScoreInput
 ): Promise<ExplainAnomalyScoreOutput> {
-   console.log("[explainAnomalyScore] Calling flow with input:", input);
+   console.log("[explainAnomalyScore] Calling flow with input:", JSON.stringify(input, null, 2));
   try {
     const result = await explainAnomalyScoreFlow(input);
-     console.log("[explainAnomalyScore] Flow returned successfully:", result);
+     console.log("[explainAnomalyScore] Flow returned successfully:", JSON.stringify(result, null, 2));
     return result;
   } catch (error) {
-    console.error('[explainAnomalyScore] Error executing flow:', error);
+    console.error('[explainAnomalyScore] Error executing flow:', error); // Log the full error
      if (error instanceof Error) {
+         console.error('[explainAnomalyScore] Flow Error Stack Trace:', error.stack); // Log stack trace
          // Re-throw the original error to be caught by the API route handler
          throw error;
      } else {
          // Wrap unknown errors
+         console.error('[explainAnomalyScore] Unknown error object thrown in flow:', error);
          throw new Error('[explainAnomalyScore] Failed to get anomaly explanation due to an unknown error.');
      }
   }
@@ -200,43 +206,50 @@ const explainAnomalyScoreFlow = ai.defineFlow<
     tools: [getTelemetryDataTool], // Provide the tool to the flow
   },
   async (input, context) => {
-     console.log('[explainAnomalyScoreFlow] Executing for satellite:', input.satelliteId);
+     console.log(`[explainAnomalyScoreFlow] Executing for satellite: ${input.satelliteId}`);
     let telemetryData: TelemetryData | null = null;
 
     try {
         // Use the tool provided by the context
-        console.log('[explainAnomalyScoreFlow] Calling tool getTelemetryData...');
-        telemetryData = await context.callTool('getTelemetryData', { satelliteId: input.satelliteId }); // Use context.callTool
-        console.log('[explainAnomalyScoreFlow] Telemetry data received from tool:', telemetryData);
+        console.log(`[explainAnomalyScoreFlow] Calling tool 'getTelemetryData' for satellite ${input.satelliteId}...`);
+        // Corrected: Use context.callTool with the tool name and input object
+        telemetryData = await context.callTool('getTelemetryData', { satelliteId: input.satelliteId });
+        console.log('[explainAnomalyScoreFlow] Telemetry data received from tool:', telemetryData ? 'Data received' : 'No data received');
 
         if (!telemetryData) {
-             // This case might be handled inside the tool itself, but double-check
-             console.error('[explainAnomalyScoreFlow] Tool getTelemetryData returned null or undefined.');
-             throw new Error(`Tool did not return telemetry data for satellite ${input.satelliteId}`);
+             // This should now be caught by the error thrown in the tool itself
+             console.error(`[explainAnomalyScoreFlow] Tool 'getTelemetryData' did not return data for satellite ${input.satelliteId}.`);
+             // Rethrow an error specific to the flow context
+             throw new Error(`Tool 'getTelemetryData' failed or returned no data for satellite ${input.satelliteId}`);
         }
 
     } catch (toolError) {
-        console.error('[explainAnomalyScoreFlow] Error executing getTelemetryData tool:', toolError);
+        console.error(`[explainAnomalyScoreFlow] Error executing 'getTelemetryData' tool for ${input.satelliteId}:`, toolError);
         // Rethrow the error to be caught by the main explainAnomalyScore function and the API route
-        throw toolError instanceof Error
-          ? new Error(`Failed to retrieve telemetry via tool: ${toolError.message}`)
-          : new Error('An unknown error occurred while using the telemetry tool.');
+        // Make the error message more specific
+        if (toolError instanceof Error) {
+           console.error(`[explainAnomalyScoreFlow] Tool Error Stack:`, toolError.stack);
+           throw new Error(`Failed to retrieve telemetry via tool: ${toolError.message}`);
+        } else {
+           console.error('[explainAnomalyScoreFlow] Unknown error object thrown by tool:', toolError);
+           throw new Error('An unknown error occurred while using the telemetry tool.');
+        }
     }
 
 
     try {
-      console.log('[explainAnomalyScoreFlow] Calling AI prompt with telemetry data...');
+      console.log('[explainAnomalyScoreFlow] Calling AI prompt with telemetry data for', input.satelliteId);
       // Pass the retrieved data to the prompt
       const result = await prompt({
         telemetryData, // Pass the data fetched by the tool
         satelliteId: input.satelliteId,
       });
-       console.log('[explainAnomalyScoreFlow] AI prompt raw result:', result); // Log the entire result object
+       console.log('[explainAnomalyScoreFlow] AI prompt raw result object:', result); // Log the entire result object
 
       // Add robust check for output and structure
       if (!result?.output) {
         console.error(
-          '[explainAnomalyScoreFlow] AI prompt did not return a valid output structure.'
+          '[explainAnomalyScoreFlow] AI prompt did not return a valid output structure. Result:', JSON.stringify(result, null, 2)
         );
         throw new Error('AI explanation response was missing or empty.');
       }
@@ -244,21 +257,30 @@ const explainAnomalyScoreFlow = ai.defineFlow<
       // Validate the output against the schema
       const validation = ExplainAnomalyScoreOutputSchema.safeParse(result.output);
       if (!validation.success) {
-          console.error("[explainAnomalyScoreFlow] AI explanation output failed schema validation:", validation.error.flatten());
+          console.error("[explainAnomalyScoreFlow] AI explanation output failed schema validation:", JSON.stringify(validation.error.flatten(), null, 2));
           // Log the problematic output
-          console.error("[explainAnomalyScoreFlow] Invalid AI output:", result.output);
+          console.error("[explainAnomalyScoreFlow] Invalid AI output received:", JSON.stringify(result.output, null, 2));
           throw new Error(`AI explanation response did not match expected format: ${validation.error.message}`);
       }
 
 
-      console.log('[explainAnomalyScoreFlow] Successfully generated output:', result.output);
+      console.log('[explainAnomalyScoreFlow] Successfully generated and validated output for', input.satelliteId);
       return result.output; // Already validated
     } catch (error) {
-       console.error('[explainAnomalyScoreFlow] Error during AI prompt execution:', error);
+       console.error(`[explainAnomalyScoreFlow] Error during AI prompt execution for ${input.satelliteId}:`, error);
        // Rethrow the error to be caught by the main explainAnomalyScore function and the API route
-       throw error; // Let the wrapper function and API route handle the specific error type
+        if (error instanceof Error) {
+            console.error(`[explainAnomalyScoreFlow] AI Prompt Error Stack:`, error.stack);
+             // Check for specific Google API errors (like API key)
+            if (error.message.includes("API key not valid")) {
+                 throw new Error("AI Error: Invalid API Key. Please check configuration.");
+            }
+            // Rethrow potentially enriched error
+            throw new Error(`AI prompt execution failed: ${error.message}`);
+        } else {
+            console.error('[explainAnomalyScoreFlow] Unknown error object thrown during AI prompt:', error);
+            throw new Error('An unknown error occurred during AI processing.');
+        }
     }
   }
 );
-
-    

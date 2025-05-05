@@ -1,3 +1,4 @@
+
 'use client';
 import dynamic from 'next/dynamic';
 import {
@@ -10,10 +11,10 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarSeparator,
-  SidebarProvider,
   useSidebar,
+  SidebarProvider, // Corrected import
 } from '@/components/ui/sidebar';
-import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card';
+import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'; // Added CardDescription import
 import {
   Battery,
   Thermometer,
@@ -24,7 +25,7 @@ import {
   Cpu,
   Rocket, // Added Rocket icon
 } from 'lucide-react';
-import { getTelemetryData, TelemetryData, subscribeToTelemetryData } from '@/services/telemetry'; // Using simulated source now
+import { subscribeToTelemetryData, TelemetryData, getTelemetryData } from '@/services/telemetry'; // Using simulated source now
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
 import {Badge} from '@/components/ui/badge';
 import {
@@ -175,26 +176,31 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
           body: JSON.stringify({ satelliteId }),
         });
 
+         // Capture response text early for debugging, regardless of status
+         const responseText = await response.text(); // Read the text stream ONCE
+
         if (!response.ok) {
-          // Read the response text ONCE
-          const responseText = await response.text();
+           console.error(`/api/explainAnomalyScore request failed with status ${response.status}. Response text:`, responseText);
           let errorData: any;
           try {
-            // Try parsing as JSON
+            // Try parsing the captured text as JSON
             errorData = JSON.parse(responseText);
           } catch (e) {
-            // If JSON parsing fails, it's likely HTML or plain text
+            // If JSON parsing fails, use the raw text
             errorData = responseText;
-            // Check if it looks like an HTML error page
-            if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
-              throw new Error(`Server returned an HTML error page (Status: ${response.status})`);
-            }
+             // Check if it looks like an HTML error page
+             if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
+                console.error("Server returned HTML instead of JSON:", errorData.substring(0, 500) + "..."); // Log a snippet
+                // Provide a more user-friendly error for HTML responses
+                throw new Error(`Server Error (Status: ${response.status}). An unexpected response was received. Please check server logs.`);
+             }
           }
           // Throw based on parsed JSON or text response
           throw new Error(errorData?.error || errorData || `HTTP error! status: ${response.status}`);
         }
 
-        const explanation = await response.json();
+        // If response.ok, parse the captured text as JSON
+        const explanation = JSON.parse(responseText);
         console.log(`Received anomaly explanation for ${satelliteId}:`, explanation);
         setAnomalyExplanation(explanation);
       } catch (aiError: any) {
@@ -214,8 +220,9 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
              setAnomalyError("AI Error: Received an unexpected response format from the AI. Please try again.");
          } else if (errorMessage.includes("Failed to retrieve telemetry")) {
              setAnomalyError(`Error: Could not retrieve telemetry data for ${satelliteId}. ${errorMessage}`);
-         } else if (errorMessage.includes("unexpected response") || errorMessage.includes("Server returned an HTML error page")) {
-             setAnomalyError("AI Error: An unexpected response was received from the server");
+         } else if (errorMessage.includes("Server Error (Status: 500)") || errorMessage.includes("Server returned an HTML error page")) {
+             // Make the message clearer for 500 errors / HTML responses
+             setAnomalyError("Server Error: An unexpected issue occurred on the server. Please check server logs for more details.");
          }
          else {
             setAnomalyError(`AI Error: ${errorMessage}`); // General error message
@@ -301,13 +308,6 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
 );
 AnomalyExplanation.displayName = 'AnomalyExplanation';
 
-// Wrapper component for client-side only rendering
-const ClientOnlyAnomalyExplanation = dynamic(() => Promise.resolve(AnomalyExplanation), {
-  ssr: false,
-  loading: () => <Button variant="outline" disabled>Loading Explanation...</Button>, // Optional loading state
-});
-
-
 // Component to display the main content area
 function HomeContent({
   batteryLevel,
@@ -332,10 +332,18 @@ function HomeContent({
 }) {
   const { selectedSatelliteId } = useSatellite(); // Get satellite ID here
   const [isClient, setIsClient] = useState(false); // Client-side check
+  const { setOpenMobile } = useSidebar(); // Safely use useSidebar here
+  const router = useRouter();
 
   useEffect(() => {
     setIsClient(true); // Component has mounted
   }, []);
+
+  const handleNavigation = (path: string) => {
+    setOpenMobile(false); // Close mobile sidebar on navigation
+    router.push(path);
+  };
+
 
   return (
     <div className="flex-1">
@@ -362,7 +370,7 @@ function HomeContent({
           </div>
            <div className="flex items-center gap-4">
              {/* Conditional render anomaly explanation button */}
-             {isClient && <ClientOnlyAnomalyExplanation satelliteId={selectedSatelliteId || ''} />}
+             {isClient && <AnomalyExplanation satelliteId={selectedSatelliteId || ''} />}
            </div>
         </div>
         <Separator className="my-4 hidden md:block" />
@@ -384,59 +392,58 @@ function HomeContent({
             <CardDescription>Latest data received from {selectedSatelliteId || '...'}.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center space-x-2">
-              <Label htmlFor="battery-level-display" className="min-w-[100px]">
-                Battery (%)
-              </Label>
-              {/* Use Input, but make it readOnly */}
-               {/* Conditionally render Input based on isClient */}
-              {isClient ? (
-                  <Input
-                    type="number"
-                    id="battery-level-display"
-                    value={telemetry === null ? '' : batteryLevel}
-                    readOnly
-                    className="w-20"
-                  />
-              ) : (
-                 <Skeleton className="h-10 w-20" />
-              )}
-            </div>
-            <div className="flex items-center space-x-2">
-              <Label htmlFor="temperature-display" className="min-w-[100px]">
-                Temperature (°C)
-              </Label>
-               {/* Conditionally render Input based on isClient */}
-              {isClient ? (
-                  <Input
-                    type="number"
-                    id="temperature-display"
-                    value={telemetry === null ? '' : temperature}
-                    readOnly
-                    className="w-20"
-                  />
+             <div className="flex items-center space-x-2">
+               <Label htmlFor="battery-level-display" className="min-w-[100px]">
+                 Battery (%)
+               </Label>
+                {/* Conditionally render Input based on isClient */}
+               {isClient ? (
+                   <Input
+                     type="number"
+                     id="battery-level-display"
+                     value={telemetry === null ? '' : batteryLevel.toFixed(0)} // Format as integer
+                     readOnly
+                     className="w-20"
+                   />
                ) : (
                   <Skeleton className="h-10 w-20" />
                )}
-            </div>
+             </div>
+             <div className="flex items-center space-x-2">
+               <Label htmlFor="temperature-display" className="min-w-[100px]">
+                 Temperature (°C)
+               </Label>
+                {/* Conditionally render Input based on isClient */}
+               {isClient ? (
+                   <Input
+                     type="number"
+                     id="temperature-display"
+                     value={telemetry === null ? '' : temperature.toFixed(1)} // Format to 1 decimal place
+                     readOnly
+                     className="w-20"
+                   />
+                ) : (
+                   <Skeleton className="h-10 w-20" />
+                )}
+             </div>
             <div className="flex items-center space-x-2">
               <Label htmlFor="comm-status-display" className="min-w-[100px]">
                 Comm Status
               </Label>
                {/* Conditionally render Input based on isClient */}
                {isClient ? (
-                  <Input
+                   <Input
                      type="text"
                      id="comm-status-display"
                      value={telemetry === null ? 'Loading...' : communicationStatus}
                      readOnly
-                     className="w-auto flex-1" // Use flex-1 to allow it to take available space, remove fixed width
-                  />
-                ) : (
-                   <Skeleton className="h-10 flex-1" /> // Use flex-1 for skeleton as well
-                )}
-            </div>
-          </CardContent>
+                     className="w-auto flex-1 min-w-[80px]" // Ensure minimum width
+                   />
+                 ) : (
+                    <Skeleton className="h-10 flex-1 min-w-[80px]" /> // Ensure minimum width for skeleton
+                 )}
+             </div>
+           </CardContent>
         </Card>
 
         {/* AI Risk Score Card */}
@@ -461,9 +468,8 @@ function HomeContent({
 }
 
 
-// Renamed original Home component to HomeContainer
+// Main container component for the Home page
 export default function HomeContainer() {
-  const router = useRouter();
   const {selectedSatelliteId} = useSatellite(); // Use context
 
   // State for displaying telemetry
@@ -597,28 +603,31 @@ export default function HomeContainer() {
            body: JSON.stringify(inputData),
          });
 
+          // Capture response text early for debugging
+          const responseText = await response.text();
+
          // Check if response is ok
          if (!response.ok) {
-             // Attempt to read the error message from the response
+            console.error(`/api/getRiskScore request failed with status ${response.status}. Response text:`, responseText);
+             // Attempt to read the error message from the captured text
              let errorData;
-             const responseText = await response.text(); // Read text first
              try {
-                 errorData = JSON.parse(responseText); // Try parsing as JSON
+                 errorData = JSON.parse(responseText); // Try parsing captured text
              } catch (e) {
                   // If JSON parsing fails, use the raw text
                   errorData = responseText;
                  // Check if it looks like an HTML error page
                  if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
                      console.error("Server returned HTML instead of JSON:", errorData.substring(0, 500) + "..."); // Log a snippet
-                      throw new Error(`Server returned an HTML error page (Status: ${response.status})`);
+                      throw new Error(`Server Error (Status: ${response.status}). Please check server logs.`);
                  }
              }
              // Throw based on parsed JSON or text response
              throw new Error(errorData?.error || errorData || `HTTP error! status: ${response.status}`);
          }
 
-        // Parse
-        const riskScore = await response.json();
+        // Parse the captured text if response.ok
+        const riskScore = JSON.parse(responseText);
         console.log("Received risk score:", riskScore);
         setRiskScoreData(riskScore);
     } catch (error: any) {
@@ -632,8 +641,8 @@ export default function HomeContainer() {
          // Add specific error handling for API key issues
          if (message.includes("API key not valid") || message.includes("Invalid API Key")) {
             setRiskScoreError("AI Error: Invalid API Key. Please check configuration.");
-          } else if (message.includes("unexpected response") || message.includes("Server returned an HTML error page")) {
-              setRiskScoreError("AI Error: An unexpected response was received from the server.");
+          } else if (message.includes("Server Error (Status: 500)") || message.includes("Server returned an HTML error page")) {
+              setRiskScoreError("Server Error: An unexpected issue occurred on the server. Check logs for details.");
          } else {
             setRiskScoreError(`AI Error: ${message}`);
          }
@@ -661,7 +670,7 @@ export default function HomeContainer() {
 
   return (
     <div className="flex min-h-screen">
-      {/* Sidebar is rendered by AppSidebar in layout now */}
+      {/* AppSidebar is rendered via layout.tsx */}
       {/* Main Content Area */}
         <HomeContent
           batteryLevel={displayBatteryLevel}
