@@ -1,4 +1,3 @@
-
 'use client';
 import dynamic from 'next/dynamic';
 import {
@@ -11,10 +10,9 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarSeparator,
-  useSidebar,
-  SidebarProvider, // Corrected import
-} from '@/components/ui/sidebar';
-import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'; // Added CardDescription import
+  useSidebar
+} from "@/components/ui/sidebar";
+import {Card, CardContent, CardHeader, CardTitle, CardDescription} from "@/components/ui/card"; // Added CardDescription
 import {
   Battery,
   Thermometer,
@@ -26,7 +24,7 @@ import {
   Rocket, // Added Rocket icon
 } from 'lucide-react';
 import { subscribeToTelemetryData, TelemetryData, getTelemetryData } from '@/services/telemetry'; // Using simulated source now
-import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert';
+import {Alert, AlertTitle, AlertDescription as UIDescription} from '@/components/ui/alert'; // Use alias for clarity
 import {Badge} from '@/components/ui/badge';
 import {
   AreaChart,
@@ -52,7 +50,7 @@ import {
 import {Separator} from '@/components/ui/separator';
 import {getRiskScore} from '@/ai/flows/get-risk-score';
 import React, {useState, useEffect, useCallback, memo} from 'react';
-import {useRouter} from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {useSatellite} from '@/context/SatelliteContext';
 import SatelliteSelector from '@/components/SatelliteSelector'; // Import SatelliteSelector
 import {
@@ -67,6 +65,7 @@ import {Input} from '@/components/ui/input';
 
 // Import types from the centralized types file
 import type {GetRiskScoreOutput, ExplainAnomalyScoreOutput} from '@/ai/types';
+
 
 interface RiskScoreDisplayProps {
   riskScoreData: GetRiskScoreOutput | null;
@@ -88,48 +87,49 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
         {isClient && error && (
           <Alert variant="destructive" className="mb-2 text-xs">
             <AlertTriangle className="h-3 w-3" />
-            <AlertTitle className="text-xs">AI Risk Score Error</AlertTitle>
+            <AlertTitle className="text-xs font-semibold">AI Risk Score Error</AlertTitle>
              {/* Display the specific error message */}
-            <AlertDescription>{error}</AlertDescription>
+            <UIDescription className="text-xs">{error}</UIDescription>
           </Alert>
         )}
          {/* Changed <p> to <div> to fix hydration error */}
-        <div className="text-2xl font-bold">
-          {isClient ? (
-            isLoading ? (
-              'Calculating...'
-            ) : riskScoreData ? (
-              `${riskScoreData.riskScore}%`
-            ) : error ? ( // Show N/A if error occurred
-                'N/A'
-            ) : (
-                'Awaiting telemetry...' // Default state before calculation or if no data
-            )
-          ) : (
-            <Skeleton className="h-8 w-1/2" /> // Skeleton for SSR/initial load
-          )}
-        </div>
+         <div className="text-2xl font-bold">
+           {isClient ? (
+             isLoading ? (
+               <Skeleton className="h-8 w-1/2" /> // Skeleton during loading
+             ) : riskScoreData ? (
+               `${riskScoreData.riskScore}%`
+             ) : error ? (
+               'N/A'
+             ) : (
+               'N/A' // Default or awaiting data
+             )
+           ) : (
+             <Skeleton className="h-8 w-1/2" /> // Skeleton for SSR/initial load
+           )}
+         </div>
          {/* Changed p to div to fix hydration error */}
-        <div className="text-sm text-muted-foreground mt-1">
-          {isClient ? (
-            isLoading ? (
-              'AI analyzing risk...'
-            ) : error ? (
-                 'Calculation failed. See error above.' // Indicate failure
-            ) : riskScoreData ? (
-              riskScoreData.explanation
-            ) : (
-              'Click button to calculate risk using current telemetry.'
-            )
-          ) : (
-            <Skeleton className="h-4 w-3/4 mt-1" /> // Skeleton for SSR/initial load
-          )}
-        </div>
+         <div className="text-sm text-muted-foreground mt-1 min-h-[20px]"> {/* Ensure min-height */}
+           {isClient ? (
+             isLoading ? (
+               <Skeleton className="h-4 w-3/4 mt-1" /> // Skeleton during loading
+             ) : error ? (
+                 'Calculation failed.' // Keep it brief
+             ) : riskScoreData ? (
+               riskScoreData.explanation
+             ) : (
+               'Click button to calculate risk.'
+             )
+           ) : (
+             <Skeleton className="h-4 w-3/4 mt-1" /> // Skeleton for SSR/initial load
+           )}
+         </div>
         {isClient && ( // Only render button on client
           <Button
             onClick={calculateRiskScore}
             disabled={isLoading}
             className="mt-4"
+            size="sm" // Make button smaller
           >
             {isLoading ? 'Calculating...' : 'Calculate Risk'}
           </Button>
@@ -186,13 +186,13 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
             // Try parsing the captured text as JSON
             errorData = JSON.parse(responseText);
           } catch (e) {
-            // If JSON parsing fails, use the raw text
-            errorData = responseText;
+             // If JSON parsing fails, use the raw text
+             errorData = responseText;
              // Check if it looks like an HTML error page
              if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
                 console.error("Server returned HTML instead of JSON:", errorData.substring(0, 500) + "..."); // Log a snippet
                 // Provide a more user-friendly error for HTML responses
-                throw new Error(`Server Error (Status: ${response.status}). An unexpected response was received. Please check server logs.`);
+                 throw new Error(`Server Error (Status: ${response.status}). An unexpected HTML response was received. Please check server logs for the underlying error (e.g., 'async_hooks' issue).`);
              }
           }
           // Throw based on parsed JSON or text response
@@ -222,7 +222,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
              setAnomalyError(`Error: Could not retrieve telemetry data for ${satelliteId}. ${errorMessage}`);
          } else if (errorMessage.includes("Server Error (Status: 500)") || errorMessage.includes("Server returned an HTML error page")) {
              // Make the message clearer for 500 errors / HTML responses
-             setAnomalyError("Server Error: An unexpected issue occurred on the server. Please check server logs for more details.");
+             setAnomalyError(errorMessage); // Display the more specific error thrown above
          }
          else {
             setAnomalyError(`AI Error: ${errorMessage}`); // General error message
@@ -234,6 +234,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
 
     // Ensure DialogTrigger and Button are only rendered client-side
     if (!isClient) {
+       // Render a disabled button server-side to prevent layout shifts
       return <Button variant="outline" disabled>Loading Explanation...</Button>;
     }
 
@@ -269,7 +270,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{anomalyError}</AlertDescription>
+                <UIDescription>{anomalyError}</UIDescription>
               </Alert>
             ) : anomalyExplanation ? (
               <div>
@@ -308,7 +309,23 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
 );
 AnomalyExplanation.displayName = 'AnomalyExplanation';
 
+const DynamicAnomalyExplanation = dynamic(() => Promise.resolve(AnomalyExplanation), { ssr: false });
+
+
 // Component to display the main content area
+interface HomeContentProps {
+  batteryLevel: number;
+  temperature: number;
+  communicationStatus: "stable" | "unstable" | "lost" | "N/A" | "Error" | "Loading..." | "Unknown";
+  riskScoreData: GetRiskScoreOutput | null;
+  riskScoreLoading: boolean;
+  riskScoreError: string | null;
+  telemetry: TelemetryData | null;
+  telemetryError: string | null;
+  calculateRiskScore: () => void;
+}
+
+
 function HomeContent({
   batteryLevel,
   temperature,
@@ -319,17 +336,7 @@ function HomeContent({
   telemetry,
   telemetryError, // Renamed from error to avoid confusion
   calculateRiskScore,
-}: {
-  batteryLevel: number;
-  temperature: number;
-  communicationStatus: string;
-  riskScoreData: GetRiskScoreOutput | null;
-  riskScoreLoading: boolean;
-  riskScoreError: string | null;
-  telemetry: TelemetryData | null;
-  telemetryError: string | null;
-  calculateRiskScore: () => void;
-}) {
+}: HomeContentProps) {
   const { selectedSatelliteId } = useSatellite(); // Get satellite ID here
   const [isClient, setIsClient] = useState(false); // Client-side check
   const { setOpenMobile } = useSidebar(); // Safely use useSidebar here
@@ -370,7 +377,7 @@ function HomeContent({
           </div>
            <div className="flex items-center gap-4">
              {/* Conditional render anomaly explanation button */}
-             {isClient && <AnomalyExplanation satelliteId={selectedSatelliteId || ''} />}
+              {isClient && <DynamicAnomalyExplanation satelliteId={selectedSatelliteId || ''} />}
            </div>
         </div>
         <Separator className="my-4 hidden md:block" />
@@ -380,7 +387,7 @@ function HomeContent({
            <Alert variant="destructive" className="mb-4">
              <AlertTriangle className="h-4 w-4" />
              <AlertTitle>Telemetry Error</AlertTitle>
-             <AlertDescription>{telemetryError}</AlertDescription>
+             <UIDescription>{telemetryError}</UIDescription>
            </Alert>
          )}
 
@@ -426,22 +433,21 @@ function HomeContent({
                    <Skeleton className="h-10 w-20" />
                 )}
              </div>
-            <div className="flex items-center space-x-2">
-              <Label htmlFor="comm-status-display" className="min-w-[100px]">
-                Comm Status
-              </Label>
-               {/* Conditionally render Input based on isClient */}
+             <div className="flex items-center space-x-2">
+               <Label htmlFor="comm-status-display" className="min-w-[100px]">
+                 Comm Status
+               </Label>
                {isClient ? (
-                   <Input
-                     type="text"
-                     id="comm-status-display"
-                     value={telemetry === null ? 'Loading...' : communicationStatus}
-                     readOnly
-                     className="w-auto flex-1 min-w-[80px]" // Ensure minimum width
-                   />
-                 ) : (
-                    <Skeleton className="h-10 flex-1 min-w-[80px]" /> // Ensure minimum width for skeleton
-                 )}
+                 <Input
+                   type="text"
+                   id="comm-status-display"
+                   value={communicationStatus} // Directly use the state variable
+                   readOnly
+                   className="flex-1 min-w-[80px]" // Ensure it takes available space
+                 />
+               ) : (
+                 <Skeleton className="h-10 flex-1 min-w-[80px]" />
+               )}
              </div>
            </CardContent>
         </Card>
@@ -476,7 +482,7 @@ export default function HomeContainer() {
   const [currentTelemetry, setCurrentTelemetry] = useState<TelemetryData | null>(null);
    const [displayBatteryLevel, setDisplayBatteryLevel] = useState<number>(0);
    const [displayTemperature, setDisplayTemperature] = useState<number>(0);
-   const [displayCommStatus, setDisplayCommStatus] = useState<string>('N/A');
+   const [displayCommStatus, setDisplayCommStatus] = useState<HomeContentProps["communicationStatus"]>('Loading...');
 
 
   // State for AI Risk Score
@@ -503,7 +509,7 @@ export default function HomeContainer() {
     setCurrentTelemetry(null); // Clear old data
     setDisplayBatteryLevel(0); // Reset display values
     setDisplayTemperature(0);
-    setDisplayCommStatus('N/A');
+    setDisplayCommStatus('Loading...'); // Indicate loading
     setRiskScoreData(null); // Clear old risk score when satellite changes
     setRiskScoreError(null);
 
@@ -581,6 +587,16 @@ export default function HomeContainer() {
   const calculateRiskScore = useCallback(async () => {
      if (!isClient) return; // Don't run on server
 
+     // Ensure comm status is valid before sending
+     const validCommStatuses = ["stable", "unstable", "lost"];
+     const currentCommStatus = displayCommStatus;
+
+      if (!validCommStatuses.includes(currentCommStatus as string) && currentCommStatus !== "Unknown") {
+          setRiskScoreError("Cannot calculate risk: Invalid communication status.");
+          return;
+      }
+
+
      setRiskScoreLoading(true);
      setRiskScoreError(null);
      setRiskScoreData(null); // Clear previous score
@@ -591,9 +607,9 @@ export default function HomeContainer() {
            batteryLevel: displayBatteryLevel,
            temperature: displayTemperature,
            // Ensure communicationStatus is one of the allowed enum values
-           communicationStatus: ["stable", "unstable", "lost"].includes(displayCommStatus)
-                                ? displayCommStatus as "stable" | "unstable" | "lost"
-                                : "unstable", // Default to unstable if status is unexpected
+           communicationStatus: validCommStatuses.includes(currentCommStatus as string)
+                                ? currentCommStatus as "stable" | "unstable" | "lost"
+                                : "unstable", // Default to unstable if status is unexpected like "N/A" or "Loading"
        };
         console.log("Calculating risk score with input:", inputData);
         // Call the API route instead of the flow directly

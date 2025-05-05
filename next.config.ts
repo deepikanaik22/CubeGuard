@@ -28,18 +28,20 @@ const nextConfig: NextConfig = {
     // Ensure experiments.topLevelAwait is enabled for potential async operations during module loading
     config.experiments = { ...config.experiments, topLevelAwait: true };
 
-    // Provide fallbacks for Node.js core modules that might be imported
-    // by dependencies but are not available in the browser environment.
+    // Handle Node.js core modules
     if (!isServer) {
+      // Provide fallbacks for browser environment
       config.resolve.fallback = {
         ...(config.resolve.fallback || {}),
-        'async_hooks': false, // Explicitly tell webpack not to resolve this module on the client
-        'fs': false,          // Example: Exclude 'fs' if needed
-        'net': false,         // Example: Exclude 'net' if needed
-        'tls': false,         // Example: Exclude 'tls' if needed
-        // Add other Node.js modules here if they cause issues
+        'async_hooks': false,
+        'fs': false,
+        'net': false,
+        'tls': false,
       };
     }
+    // No specific server-side externals needed for 'async_hooks' here,
+    // as the issue seems related to client-side bundling or server component externalization.
+    // The serverComponentsExternalPackages should handle server-side availability.
 
     // Important: return the modified config
     return config;
