@@ -13,7 +13,7 @@ import {
   SidebarProvider,
   useSidebar
 } from "@/components/ui/sidebar";
-import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card';
+import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'; // Ensure CardDescription is imported
 import {
   Battery,
   Thermometer,
@@ -176,8 +176,20 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
            body: JSON.stringify({ satelliteId }),
          });
           if (!response.ok) {
-             const errorData = await response.json();
-              throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+             // Attempt to read the error message from the response
+             let errorData;
+             try {
+                 errorData = await response.json();
+             } catch (e) {
+                 // If JSON parsing fails, use the raw text of the response
+                 errorData = await response.text();
+                 // Check if it looks like an HTML error page
+                 if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
+                      throw new Error(`Server returned an HTML error page (Status: ${response.status})`);
+                 }
+             }
+             // Throw based on parsed JSON or text response
+              throw new Error(errorData?.error || errorData || `HTTP error! status: ${response.status}`);
           }
          const explanation = await response.json();
         console.log(`Received anomaly explanation for ${satelliteId}:`, explanation);
@@ -199,7 +211,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
              setAnomalyError("AI Error: Received an unexpected response format from the AI. Please try again.");
          } else if (errorMessage.includes("Failed to retrieve telemetry")) {
              setAnomalyError(`Error: Could not retrieve telemetry data for ${satelliteId}. ${errorMessage}`);
-         } else if (errorMessage.includes("unexpected response")) {
+         } else if (errorMessage.includes("unexpected response") || errorMessage.includes("Server returned an HTML error page")) {
              setAnomalyError("AI Error: An unexpected response was received from the server");
          }
          else {
@@ -212,7 +224,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
 
     // Ensure DialogTrigger and Button are only rendered client-side
     if (!isClient) {
-      return <Button variant="outline" disabled>Loading...</Button>;
+      return <Button variant="outline" disabled>Loading Explanation...</Button>;
     }
 
     return (
@@ -424,7 +436,7 @@ function HomeContent({
                      id="comm-status-display"
                      value={telemetry === null ? 'Loading...' : communicationStatus}
                      readOnly
-                     className="w-[180px]"
+                     className="w-auto flex-1" // Use flex-1 to allow it to take available space, remove fixed width
                   />
                 ) : (
                    <Skeleton className="h-10 w-[180px]" />
@@ -591,11 +603,25 @@ export default function HomeContainer() {
            body: JSON.stringify(inputData),
          });
 
+         // Check if response is ok
          if (!response.ok) {
-             const errorData = await response.json();
-              throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+             // Attempt to read the error message from the response
+             let errorData;
+             try {
+                 errorData = await response.json();
+             } catch (e) {
+                  // If JSON parsing fails, use the raw text of the response
+                 errorData = await response.text();
+                 // Check if it looks like an HTML error page
+                 if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
+                      throw new Error(`Server returned an HTML error page (Status: ${response.status})`);
+                 }
+             }
+             // Throw based on parsed JSON or text response
+             throw new Error(errorData?.error || errorData || `HTTP error! status: ${response.status}`);
          }
 
+        // Parse
         const riskScore = await response.json();
         console.log("Received risk score:", riskScore);
         setRiskScoreData(riskScore);
@@ -610,6 +636,8 @@ export default function HomeContainer() {
          // Add specific error handling for API key issues
          if (message.includes("API key not valid") || message.includes("Invalid API Key")) {
             setRiskScoreError("AI Error: Invalid API Key. Please check configuration.");
+          } else if (message.includes("unexpected response") || message.includes("Server returned an HTML error page")) {
+              setRiskScoreError("AI Error: An unexpected response was received from the server.");
          } else {
             setRiskScoreError(`AI Error: ${message}`);
          }
