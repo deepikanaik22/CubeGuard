@@ -11,9 +11,9 @@ import {
   SidebarTrigger,
   SidebarSeparator,
   SidebarProvider,
-  useSidebar
-} from "@/components/ui/sidebar";
-import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'; // Ensure CardDescription is imported
+  useSidebar,
+} from '@/components/ui/sidebar';
+import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card';
 import {
   Battery,
   Thermometer,
@@ -169,29 +169,32 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
 
       try {
         console.log(`Requesting anomaly explanation for ${satelliteId}`);
-        // const explanation = await explainAnomalyScore({satelliteId: satelliteId});
-         const response = await fetch('/api/explainAnomalyScore', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ satelliteId }),
-         });
-          if (!response.ok) {
-             // Attempt to read the error message from the response
-             let errorData;
-             try {
-                 errorData = await response.json();
-             } catch (e) {
-                 // If JSON parsing fails, use the raw text of the response
-                 errorData = await response.text();
-                 // Check if it looks like an HTML error page
-                 if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
-                      throw new Error(`Server returned an HTML error page (Status: ${response.status})`);
-                 }
-             }
-             // Throw based on parsed JSON or text response
-              throw new Error(errorData?.error || errorData || `HTTP error! status: ${response.status}`);
+        const response = await fetch('/api/explainAnomalyScore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ satelliteId }),
+        });
+
+        if (!response.ok) {
+          // Read the response text ONCE
+          const responseText = await response.text();
+          let errorData: any;
+          try {
+            // Try parsing as JSON
+            errorData = JSON.parse(responseText);
+          } catch (e) {
+            // If JSON parsing fails, it's likely HTML or plain text
+            errorData = responseText;
+            // Check if it looks like an HTML error page
+            if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
+              throw new Error(`Server returned an HTML error page (Status: ${response.status})`);
+            }
           }
-         const explanation = await response.json();
+          // Throw based on parsed JSON or text response
+          throw new Error(errorData?.error || errorData || `HTTP error! status: ${response.status}`);
+        }
+
+        const explanation = await response.json();
         console.log(`Received anomaly explanation for ${satelliteId}:`, explanation);
         setAnomalyExplanation(explanation);
       } catch (aiError: any) {
@@ -598,11 +601,12 @@ export default function HomeContainer() {
          if (!response.ok) {
              // Attempt to read the error message from the response
              let errorData;
+             const responseText = await response.text(); // Read text first
              try {
-                 errorData = await response.json();
+                 errorData = JSON.parse(responseText); // Try parsing as JSON
              } catch (e) {
-                 // If JSON parsing fails, use the raw text of the response
-                  errorData = await response.text();
+                  // If JSON parsing fails, use the raw text
+                  errorData = responseText;
                  // Check if it looks like an HTML error page
                  if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
                      console.error("Server returned HTML instead of JSON:", errorData.substring(0, 500) + "..."); // Log a snippet
