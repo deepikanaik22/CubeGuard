@@ -5,7 +5,7 @@
  * - explainAnomalyScore - A function that explains the anomaly score.
  */
 
-import {ai} from '@/ai/ai-instance';
+import {ai} from '@/ai/ai-instance'; // Correctly imports ai instance from the non-'use server' file
 import {TelemetryData, getTelemetryData} from '@/services/telemetry';
 import {z} from 'genkit';
 import type {

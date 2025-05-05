@@ -1,4 +1,4 @@
-'use server'; // Mark this module explicitly as server-only
+// Removed 'use server' directive as this file exports the 'ai' object
 
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
@@ -17,10 +17,7 @@ if (apiKey) {
 }
 // --- End Enhanced Logging ---
 
-
-// Define the ai instance. This should NOT be marked 'use server' itself.
-// Updated: Removed 'use client' and added 'use server' at the top
-// This module should only be imported by server components or server actions ('use server' files)
+// Define the ai instance. This module should be imported by server components or server actions ('use server' files)
 export const ai = genkit({
   promptDir: './prompts', // Note: This might need adjustment if prompts are stored elsewhere
   plugins: [

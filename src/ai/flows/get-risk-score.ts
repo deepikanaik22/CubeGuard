@@ -4,7 +4,7 @@
  *
  * - getRiskScore - A function that calculates the risk score.
  */
-import {ai} from '@/ai/ai-instance';
+import {ai} from '@/ai/ai-instance'; // Correctly imports ai instance from the non-'use server' file
 import {z} from 'genkit';
 import type {GetRiskScoreInput, GetRiskScoreOutput} from '@/ai/types'; // Import types
 
@@ -69,7 +69,7 @@ Consider the following factors carefully:
 - Very high (> 40°C) or very low (< -10°C) temperatures increase the risk.
 - Unstable or lost communication significantly increases the risk. 'Lost' status represents the highest communication risk.
 
-Output the risk score and a concise explanation based ONLY on the provided data and risk factors.`,
+Output the risk score and a concise explanation based ONLY on the provided data and risk factors. Ensure the output strictly adheres to the required JSON format.`,
 });
 
 const getRiskScoreFlow = ai.defineFlow<
