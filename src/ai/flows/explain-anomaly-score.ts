@@ -131,6 +131,7 @@ const prompt = ai.definePrompt<
   typeof ExplainAnomalyScoreOutputSchema
 >({
   name: 'explainAnomalyScorePrompt',
+  model: 'gemini-1.5-flash-latest', // Explicitly set a faster model
   input: {
     schema: z.object({
       satelliteId: z.string(),
@@ -192,10 +193,14 @@ const explainAnomalyScoreFlow = ai.defineFlow<
   async (input, context) => {
      console.log(`[explainAnomalyScoreFlow] Starting execution for satellite: ${input.satelliteId}`);
     let telemetryData: TelemetryData | null = null;
+    const flowStartTime = Date.now();
 
     try {
         console.log(`[explainAnomalyScoreFlow] Calling tool 'getTelemetryData' for satellite ${input.satelliteId}. Context available: ${!!context}`);
+        const toolStartTime = Date.now();
         telemetryData = await context.callTool('getTelemetryData', { satelliteId: input.satelliteId });
+        const toolEndTime = Date.now();
+        console.log(`[explainAnomalyScoreFlow] Tool 'getTelemetryData' completed in ${toolEndTime - toolStartTime}ms.`);
         console.log('[explainAnomalyScoreFlow] Telemetry data received from tool:', telemetryData ? 'Data received' : 'No data received (null)');
 
         if (!telemetryData) {
@@ -215,11 +220,14 @@ const explainAnomalyScoreFlow = ai.defineFlow<
 
     try {
       console.log(`[explainAnomalyScoreFlow] Calling AI prompt with telemetry data for ${input.satelliteId}. Telemetry data:`, JSON.stringify(telemetryData, null, 2));
+      const promptStartTime = Date.now();
       const result = await prompt({
         telemetryData,
         satelliteId: input.satelliteId,
       });
-       console.log('[explainAnomalyScoreFlow] AI prompt raw result object:', JSON.stringify(result, null, 2));
+      const promptEndTime = Date.now();
+      console.log(`[explainAnomalyScoreFlow] AI prompt execution completed in ${promptEndTime - promptStartTime}ms.`);
+      console.log('[explainAnomalyScoreFlow] AI prompt raw result object:', JSON.stringify(result, null, 2));
 
       if (!result?.output) {
         console.error(
@@ -235,7 +243,8 @@ const explainAnomalyScoreFlow = ai.defineFlow<
           throw new Error(`AI explanation response did not match expected format: ${validation.error.message}`);
       }
 
-      console.log(`[explainAnomalyScoreFlow] Successfully generated and validated output for ${input.satelliteId}`);
+      const flowEndTime = Date.now();
+      console.log(`[explainAnomalyScoreFlow] Successfully generated and validated output for ${input.satelliteId}. Total flow time: ${flowEndTime - flowStartTime}ms.`);
       return result.output;
     } catch (error) {
        console.error(`[explainAnomalyScoreFlow] Error during AI prompt execution for ${input.satelliteId}:`, error);
@@ -243,6 +252,10 @@ const explainAnomalyScoreFlow = ai.defineFlow<
             console.error(`[explainAnomalyScoreFlow] AI Prompt Error Stack:`, error.stack);
             if (error.message.includes("API key not valid")) {
                  throw new Error("AI Error: Invalid API Key. Please check configuration.");
+            }
+            // Check for timeout specific messages if the SDK provides them, otherwise rely on general message
+            if (error.message.toLowerCase().includes('timeout') || error.message.toLowerCase().includes('deadline exceeded')) {
+                throw new Error(`AI prompt execution timed out for ${input.satelliteId}: ${error.message}`);
             }
             throw new Error(`AI prompt execution failed for ${input.satelliteId}: ${error.message}`);
         } else {
@@ -252,3 +265,4 @@ const explainAnomalyScoreFlow = ai.defineFlow<
     }
   }
 );
+
