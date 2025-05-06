@@ -1,28 +1,32 @@
-// This file defines the ai instance. It should be imported by 'use server' files (flows, API routes).
+'use server'; // Ensuring this file is treated as a server module to align with its usage.
+/**
+ * @fileOverview Defines the Genkit AI instance.
+ * This file should be imported by other 'use server' files (flows, API routes).
+ */
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
 
-// --- API Key Logging ---
+// Retrieve the API key from environment variables
 const apiKey = process.env.GOOGLE_GENAI_API_KEY;
-console.log('--- Genkit Initialization Start (ai-instance.ts) ---');
-if (apiKey && apiKey.trim() !== '') {
-  console.log('GOOGLE_GENAI_API_KEY: Environment variable FOUND and is NOT empty.');
-} else if (!apiKey) {
-  console.error('CRITICAL ERROR: GOOGLE_GENAI_API_KEY environment variable is NOT SET or is undefined.');
-} else if (apiKey.trim() === '') {
-   console.error('CRITICAL ERROR: GOOGLE_GENAI_API_KEY environment variable IS EMPTY.');
+
+// Basic check for API key presence during server startup (will log in server console)
+if (!apiKey || apiKey.trim() === '') {
+  console.error('CRITICAL AI INIT ERROR: GOOGLE_GENAI_API_KEY environment variable is not set or is empty.');
+} else {
+  // Optional: Log that key is found, but not the key itself for security.
+  // console.log('GOOGLE_GENAI_API_KEY: Environment variable found for Genkit AI initialization.');
 }
-// --- End API Key Logging ---
 
 export const ai = genkit({
   plugins: [
     googleAI({
-      apiKey: apiKey, // Explicitly pass the API key. The googleAI plugin will handle if it's invalid.
+      // The googleAI plugin will internally handle the apiKey.
+      // If apiKey is undefined or empty here, the plugin itself will likely throw a more specific error later if a call is made.
+      apiKey: apiKey,
     }),
   ],
-  logLevel: 'debug',
-  enableTracing: true,
+  logLevel: 'debug', // Keep logLevel for Genkit's own logging verbosity.
+  enableTracing: true, // Keep tracing enabled for debugging flows.
 });
 
-console.log('Genkit ai instance configured in ai-instance.ts.');
-console.log('--- Genkit Initialization End (ai-instance.ts) ---');
+// console.log('Genkit ai instance configured in ai-instance.ts.'); // Removed to prevent "use server" export issues
