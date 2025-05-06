@@ -37,7 +37,28 @@ const nextConfig = {
   webpack: (config, { isServer, webpack }) => {
     config.experiments = { ...config.experiments, topLevelAwait: true };
 
-    if (!isServer) {
+    if (isServer) {
+      // Ensure 'async_hooks' and other problematic Node.js built-ins are treated as external
+      // This helps prevent "Module not found" errors for these modules on the server.
+      const currentExternals = Array.isArray(config.externals) ? config.externals : [];
+      config.externals = [
+        ...currentExternals,
+        // Add Node.js built-ins that might be causing issues if bundled
+        'async_hooks',
+        // 'child_process', // Add others if similar errors appear
+        // 'crypto',
+        // 'fs',
+        // 'http',
+        // 'https',
+        // 'net',
+        // 'os',
+        // 'path',
+        // 'stream',
+        // 'tls',
+        // 'util',
+        // 'zlib',
+      ];
+    } else {
       // Fallbacks for browser environment for Node.js core modules
       config.resolve.fallback = {
         ...(config.resolve.fallback || {}),
@@ -56,10 +77,6 @@ const nextConfig = {
         'zlib': false,
       };
     }
-    // No need to add 'async_hooks' to externals for server-side here if
-    // serverComponentsExternalPackages is correctly configured.
-    // Next.js should handle Node.js built-ins correctly on the server.
-
     return config;
   },
 };
