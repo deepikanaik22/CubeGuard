@@ -1,3 +1,4 @@
+// src/app/page.tsx
 'use client';
 import dynamic from 'next/dynamic';
 import {
@@ -10,9 +11,9 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarSeparator,
-  useSidebar
+  useSidebar, // Import useSidebar
 } from "@/components/ui/sidebar";
-import {Card, CardContent, CardHeader, CardTitle, CardDescription} from "@/components/ui/card"; // Added CardDescription
+import {Card, CardContent, CardHeader, CardTitle, CardDescription} from "@/components/ui/card";
 import {
   Battery,
   Thermometer,
@@ -21,10 +22,10 @@ import {
   Navigation,
   AlertTriangle,
   Cpu,
-  Rocket, // Added Rocket icon
+  Rocket,
 } from 'lucide-react';
-import { subscribeToTelemetryData, TelemetryData, getTelemetryData } from '@/services/telemetry'; // Using simulated source now
-import {Alert, AlertTitle, AlertDescription as UIDescription} from '@/components/ui/alert'; // Use alias for clarity
+import { subscribeToTelemetryData, TelemetryData, getTelemetryData } from '@/services/telemetry';
+import {Alert, AlertTitle, AlertDescription as UIDescription} from '@/components/ui/alert';
 import {Badge} from '@/components/ui/badge';
 import {
   AreaChart,
@@ -42,17 +43,17 @@ import {Button} from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  DialogHeader as DialogPrimitiveHeader, // Alias to avoid conflict
+  DialogTitle as DialogPrimitiveTitle, // Alias to avoid conflict
+  DialogDescription as DialogPrimitiveDescription, // Alias to avoid conflict
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {Separator} from '@/components/ui/separator';
+import {Separator as UiSeparator} from '@/components/ui/separator'; // Alias Separator
 import {getRiskScore} from '@/ai/flows/get-risk-score';
 import React, {useState, useEffect, useCallback, memo} from 'react';
 import { useRouter } from 'next/navigation';
 import {useSatellite} from '@/context/SatelliteContext';
-import SatelliteSelector from '@/components/SatelliteSelector'; // Import SatelliteSelector
+import SatelliteSelector from '@/components/SatelliteSelector';
 import {
   Select,
   SelectContent,
@@ -71,10 +72,9 @@ interface RiskScoreDisplayProps {
   riskScoreData: GetRiskScoreOutput | null;
   isLoading: boolean;
   error: string | null;
-  calculateRiskScore: () => void; // Add calculateRiskScore prop
+  calculateRiskScore: () => void;
 }
 
-// Memoize RiskScoreDisplay
 const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
   ({riskScoreData, isLoading, error, calculateRiskScore}) => {
     const [isClient, setIsClient] = useState(false);
@@ -88,48 +88,45 @@ const RiskScoreDisplay: React.FC<RiskScoreDisplayProps> = memo(
           <Alert variant="destructive" className="mb-2 text-xs">
             <AlertTriangle className="h-3 w-3" />
             <AlertTitle className="text-xs font-semibold">AI Risk Score Error</AlertTitle>
-             {/* Display the specific error message */}
             <UIDescription className="text-xs">{error}</UIDescription>
           </Alert>
         )}
-         {/* Changed <p> to <div> to fix hydration error */}
-         <div className="text-2xl font-bold">
+         <div className="text-2xl font-bold"> {/* Changed p to div */}
            {isClient ? (
              isLoading ? (
-               <Skeleton className="h-8 w-1/2" /> // Skeleton during loading
+               <Skeleton className="h-8 w-1/2" />
              ) : riskScoreData ? (
                `${riskScoreData.riskScore}%`
              ) : error ? (
                'N/A'
              ) : (
-               'N/A' // Default or awaiting data
+               'N/A'
              )
            ) : (
-             <Skeleton className="h-8 w-1/2" /> // Skeleton for SSR/initial load
+             <Skeleton className="h-8 w-1/2" />
            )}
          </div>
-         {/* Changed p to div to fix hydration error */}
-         <div className="text-sm text-muted-foreground mt-1 min-h-[20px]"> {/* Ensure min-height */}
+         <div className="text-sm text-muted-foreground mt-1 min-h-[20px]"> {/* Changed p to div */}
            {isClient ? (
              isLoading ? (
-               <Skeleton className="h-4 w-3/4 mt-1" /> // Skeleton during loading
+               <Skeleton className="h-4 w-3/4 mt-1" />
              ) : error ? (
-                 'Calculation failed.' // Keep it brief
+                 'Calculation failed.'
              ) : riskScoreData ? (
                riskScoreData.explanation
              ) : (
                'Click button to calculate risk.'
              )
            ) : (
-             <Skeleton className="h-4 w-3/4 mt-1" /> // Skeleton for SSR/initial load
+             <Skeleton className="h-4 w-3/4 mt-1" />
            )}
          </div>
-        {isClient && ( // Only render button on client
+        {isClient && (
           <Button
             onClick={calculateRiskScore}
             disabled={isLoading}
             className="mt-4"
-            size="sm" // Make button smaller
+            size="sm"
           >
             {isLoading ? 'Calculating...' : 'Calculate Risk'}
           </Button>
@@ -142,10 +139,9 @@ RiskScoreDisplay.displayName = 'RiskScoreDisplay';
 
 
 interface AnomalyExplanationProps {
-  satelliteId: string; // Pass satelliteId only
+  satelliteId: string;
 }
 
-// Memoize AnomalyExplanation
 const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
   ({satelliteId}) => {
     const [anomalyExplanation, setAnomalyExplanation] =
@@ -158,7 +154,6 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
       setIsClient(true);
     }, []);
 
-    // Function to fetch anomaly explanation using AI
     const fetchAnomalyExplanation = useCallback(async () => {
       if (!satelliteId) {
           setAnomalyError("Please select a satellite first.");
@@ -166,7 +161,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
       }
       setIsLoadingAnomaly(true);
       setAnomalyError(null);
-      setAnomalyExplanation(null); // Clear previous explanation
+      setAnomalyExplanation(null);
 
       try {
         console.log(`Requesting anomaly explanation for ${satelliteId}`);
@@ -176,30 +171,23 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
           body: JSON.stringify({ satelliteId }),
         });
 
-         // Capture response text early for debugging, regardless of status
-         const responseText = await response.text(); // Read the text stream ONCE
+         const responseText = await response.text();
 
         if (!response.ok) {
            console.error(`/api/explainAnomalyScore request failed with status ${response.status}. Response text:`, responseText);
           let errorData: any;
           try {
-            // Try parsing the captured text as JSON
             errorData = JSON.parse(responseText);
           } catch (e) {
-             // If JSON parsing fails, use the raw text
              errorData = responseText;
-             // Check if it looks like an HTML error page
              if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
                 console.error("Server returned HTML instead of JSON:", errorData.substring(0, 500) + "..."); // Log a snippet
-                // Provide a more user-friendly error for HTML responses
                  throw new Error(`Server Error (Status: ${response.status}). An unexpected HTML response was received. Please check server logs for the underlying error (e.g., 'async_hooks' issue).`);
              }
           }
-          // Throw based on parsed JSON or text response
           throw new Error(errorData?.error || errorData || `HTTP error! status: ${response.status}`);
         }
 
-        // If response.ok, parse the captured text as JSON
         const explanation = JSON.parse(responseText);
         console.log(`Received anomaly explanation for ${satelliteId}:`, explanation);
         setAnomalyExplanation(explanation);
@@ -207,11 +195,10 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
         console.error('Error calling explainAnomalyScore AI flow:', aiError);
         let errorMessage = 'An unexpected error occurred.';
         if (aiError instanceof Error) {
-          errorMessage = aiError.message; // Use the message from the caught error
+          errorMessage = aiError.message;
         } else if (typeof aiError === 'string') {
           errorMessage = aiError;
         }
-         // Provide more specific user feedback based on common errors
          if (errorMessage.includes("API key not valid") || errorMessage.includes("Invalid API Key")) {
             setAnomalyError("AI Error: Invalid API Key. Please check your .env configuration.");
          } else if (errorMessage.includes("429")) {
@@ -221,20 +208,19 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
          } else if (errorMessage.includes("Failed to retrieve telemetry")) {
              setAnomalyError(`Error: Could not retrieve telemetry data for ${satelliteId}. ${errorMessage}`);
          } else if (errorMessage.includes("Server Error (Status: 500)") || errorMessage.includes("Server returned an HTML error page")) {
-             // Make the message clearer for 500 errors / HTML responses
-             setAnomalyError(errorMessage); // Display the more specific error thrown above
+             setAnomalyError(errorMessage);
+         } else if (errorMessage.includes("Server Error (Status: 500). An unexpected HTML response was received.")){
+             setAnomalyError(errorMessage);
          }
          else {
-            setAnomalyError(`AI Error: ${errorMessage}`); // General error message
+            setAnomalyError(`AI Error: ${errorMessage}`);
          }
       } finally {
         setIsLoadingAnomaly(false);
       }
-    }, [satelliteId]); // Dependency is only satelliteId
+    }, [satelliteId]);
 
-    // Ensure DialogTrigger and Button are only rendered client-side
     if (!isClient) {
-       // Render a disabled button server-side to prevent layout shifts
       return <Button variant="outline" disabled>Loading Explanation...</Button>;
     }
 
@@ -250,20 +236,20 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
            </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Anomaly Explanation for {satelliteId}</DialogTitle>
-            <DialogDescription>
+          <DialogPrimitiveHeader>
+            <DialogPrimitiveTitle>Anomaly Explanation for {satelliteId}</DialogPrimitiveTitle>
+            <DialogPrimitiveDescription>
               AI-powered analysis of the anomaly risk score based on latest
               telemetry.
-            </DialogDescription>
-          </DialogHeader>
+            </DialogPrimitiveDescription>
+          </DialogPrimitiveHeader>
           <div className="mt-4">
             {isLoadingAnomaly ? (
               <div className="space-y-2">
                 <Skeleton className="h-4 w-3/4" />
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-1/2" />
-                <Separator className="my-4" />
+                <UiSeparator className="my-4" />
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : anomalyError ? (
@@ -278,7 +264,7 @@ const AnomalyExplanation: React.FC<AnomalyExplanationProps> = memo(
                 <p className="text-sm text-muted-foreground mb-4">
                   {anomalyExplanation.explanation}
                 </p>
-                <Separator className="my-4" />
+                <UiSeparator className="my-4" />
                 <h4 className="font-semibold mb-2">Risk Breakdown:</h4>
                 <ul className="list-disc pl-5 space-y-1 text-sm">
                   <li>
@@ -312,7 +298,6 @@ AnomalyExplanation.displayName = 'AnomalyExplanation';
 const DynamicAnomalyExplanation = dynamic(() => Promise.resolve(AnomalyExplanation), { ssr: false });
 
 
-// Component to display the main content area
 interface HomeContentProps {
   batteryLevel: number;
   temperature: number;
@@ -331,43 +316,38 @@ function HomeContent({
   temperature,
   communicationStatus,
   riskScoreData,
-  riskScoreLoading, // Pass down loading state
-  riskScoreError,   // Pass down error state
+  riskScoreLoading,
+  riskScoreError,
   telemetry,
-  telemetryError, // Renamed from error to avoid confusion
+  telemetryError,
   calculateRiskScore,
 }: HomeContentProps) {
-  const { selectedSatelliteId } = useSatellite(); // Get satellite ID here
-  const [isClient, setIsClient] = useState(false); // Client-side check
-  const { setOpenMobile } = useSidebar(); // Safely use useSidebar here
+  const { selectedSatelliteId } = useSatellite();
+  const [isClient, setIsClient] = useState(false);
+  const { setOpenMobile } = useSidebar();
   const router = useRouter();
 
   useEffect(() => {
-    setIsClient(true); // Component has mounted
+    setIsClient(true);
   }, []);
 
   const handleNavigation = (path: string) => {
-    setOpenMobile(false); // Close mobile sidebar on navigation
+    setOpenMobile(false);
     router.push(path);
   };
 
 
   return (
     <div className="flex-1">
-      {/* Header for mobile - Keep this structure */}
       <header className="sticky top-0 z-10 flex h-[57px] items-center gap-1 border-b bg-background px-4 md:hidden">
-        {isClient && <SidebarTrigger className="md:hidden" />} {/* Conditionally render based on isClient */}
+        {isClient && <SidebarTrigger className="md:hidden" />}
         <h1 className="text-xl font-semibold ml-2">CubeSense</h1>
         <div className="ml-auto">
           {isClient && <SatelliteSelector />}
         </div>
       </header>
 
-      {/* Main content */}
       <div className="p-4">
-        {' '}
-        {/* Added padding for spacing */}
-        {/* Desktop Header */}
         <div className="hidden md:flex flex-wrap items-center justify-between gap-4 mb-4">
            <div className="flex items-center gap-2">
             <Rocket className="h-6 w-6 text-primary" />
@@ -376,13 +356,11 @@ function HomeContent({
             </h1>
           </div>
            <div className="flex items-center gap-4">
-             {/* Conditional render anomaly explanation button */}
               {isClient && <DynamicAnomalyExplanation satelliteId={selectedSatelliteId || ''} />}
            </div>
         </div>
-        <Separator className="my-4 hidden md:block" />
+        <UiSeparator className="my-4 hidden md:block" />
 
-         {/* Show telemetry error if present */}
          {telemetryError && (
            <Alert variant="destructive" className="mb-4">
              <AlertTriangle className="h-4 w-4" />
@@ -392,7 +370,6 @@ function HomeContent({
          )}
 
 
-        {/* Telemetry Snapshot Area */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Live Telemetry Snapshot</CardTitle>
@@ -403,12 +380,11 @@ function HomeContent({
                <Label htmlFor="battery-level-display" className="min-w-[100px]">
                  Battery (%)
                </Label>
-                {/* Conditionally render Input based on isClient */}
                {isClient ? (
                    <Input
                      type="number"
                      id="battery-level-display"
-                     value={telemetry === null ? '' : batteryLevel.toFixed(0)} // Format as integer
+                     value={telemetry === null ? '' : batteryLevel.toFixed(0)}
                      readOnly
                      className="w-20"
                    />
@@ -420,12 +396,11 @@ function HomeContent({
                <Label htmlFor="temperature-display" className="min-w-[100px]">
                  Temperature (°C)
                </Label>
-                {/* Conditionally render Input based on isClient */}
                {isClient ? (
                    <Input
                      type="number"
                      id="temperature-display"
-                     value={telemetry === null ? '' : temperature.toFixed(1)} // Format to 1 decimal place
+                     value={telemetry === null ? '' : temperature.toFixed(1)}
                      readOnly
                      className="w-20"
                    />
@@ -438,13 +413,9 @@ function HomeContent({
                  Comm Status
                </Label>
                {isClient ? (
-                 <Input
-                   type="text"
-                   id="comm-status-display"
-                   value={communicationStatus} // Directly use the state variable
-                   readOnly
-                   className="flex-1 min-w-[80px]" // Ensure it takes available space
-                 />
+                  <div className="flex-1 min-w-[80px] h-10 px-3 py-2 rounded-md border border-input bg-background text-sm">
+                    {communicationStatus}
+                  </div>
                ) : (
                  <Skeleton className="h-10 flex-1 min-w-[80px]" />
                )}
@@ -452,14 +423,12 @@ function HomeContent({
            </CardContent>
         </Card>
 
-        {/* AI Risk Score Card */}
         <Card>
           <CardHeader>
             <CardTitle>AI Anomaly Risk Score</CardTitle>
              <CardDescription>Calculated based on the latest telemetry snapshot.</CardDescription>
           </CardHeader>
           <CardContent>
-             {/* Pass loading and error states down */}
             <RiskScoreDisplay
               riskScoreData={riskScoreData}
               isLoading={riskScoreLoading}
@@ -474,43 +443,38 @@ function HomeContent({
 }
 
 
-// Main container component for the Home page
 export default function HomeContainer() {
-  const {selectedSatelliteId} = useSatellite(); // Use context
+  const {selectedSatelliteId} = useSatellite();
 
-  // State for displaying telemetry
   const [currentTelemetry, setCurrentTelemetry] = useState<TelemetryData | null>(null);
    const [displayBatteryLevel, setDisplayBatteryLevel] = useState<number>(0);
    const [displayTemperature, setDisplayTemperature] = useState<number>(0);
    const [displayCommStatus, setDisplayCommStatus] = useState<HomeContentProps["communicationStatus"]>('Loading...');
 
 
-  // State for AI Risk Score
   const [riskScoreData, setRiskScoreData] = useState<GetRiskScoreOutput | null>(
     null
   );
    const [riskScoreLoading, setRiskScoreLoading] = useState<boolean>(false);
    const [riskScoreError, setRiskScoreError] = useState<string | null>(null);
 
-  // General Error State (for telemetry fetching)
   const [telemetryError, setTelemetryError] = useState<string | null>(null);
-   const [isClient, setIsClient] = useState(false); // Client-side check
+   const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
-      setIsClient(true); // Component has mounted
+      setIsClient(true);
     }, []);
 
 
-  // Fetch and update telemetry data based on subscription
   useEffect(() => {
-    if (!selectedSatelliteId || !isClient) return; // Only run on client with satelliteId
+    if (!selectedSatelliteId || !isClient) return;
 
-    setTelemetryError(null); // Clear previous errors
-    setCurrentTelemetry(null); // Clear old data
-    setDisplayBatteryLevel(0); // Reset display values
+    setTelemetryError(null);
+    setCurrentTelemetry(null);
+    setDisplayBatteryLevel(0);
     setDisplayTemperature(0);
-    setDisplayCommStatus('Loading...'); // Indicate loading
-    setRiskScoreData(null); // Clear old risk score when satellite changes
+    setDisplayCommStatus('Loading...');
+    setRiskScoreData(null);
     setRiskScoreError(null);
 
 
@@ -518,13 +482,10 @@ export default function HomeContainer() {
     const unsubscribe = subscribeToTelemetryData(
       selectedSatelliteId,
       (data) => {
-         // console.log(`Received telemetry update for ${selectedSatelliteId}:`, data?.timestamp);
         setCurrentTelemetry(data);
-        setTelemetryError(null); // Clear error on successful update
+        setTelemetryError(null);
 
-        // Update display values based on new data
          if (data) {
-            // More robust battery calculation (ensure no division by zero or NaN)
             const voltage = data.batteryVoltage;
             const minVoltage = 3.5;
             const maxVoltage = 4.2;
@@ -537,7 +498,6 @@ export default function HomeContainer() {
 
             setDisplayTemperature(data.internalTemperature);
 
-            // Determine Comm Status based on Signal Strength
              const signalStrength = data.communicationLogs?.signalStrength;
              if (signalStrength == null) {
                 setDisplayCommStatus('Unknown');
@@ -548,15 +508,11 @@ export default function HomeContainer() {
              } else {
                setDisplayCommStatus("lost");
              }
-             // Optionally, trigger risk score calculation automatically on new data
-             // calculateRiskScore(); // Uncomment if auto-calculation is desired
          } else {
-             // Handle case where data is null (e.g., initial load or error)
              setDisplayBatteryLevel(0);
              setDisplayTemperature(0);
              setDisplayCommStatus('N/A');
               console.warn(`Received null telemetry data for ${selectedSatelliteId}`);
-              // Optionally set an error or warning state here
               setTelemetryError("No telemetry data currently available.");
          }
       },
@@ -568,26 +524,23 @@ export default function HomeContainer() {
         setTelemetryError(
           `Failed to subscribe to telemetry for ${selectedSatelliteId}: ${error.message}`
         );
-        setCurrentTelemetry(null); // Clear data on error
+        setCurrentTelemetry(null);
          setDisplayBatteryLevel(0);
          setDisplayTemperature(0);
          setDisplayCommStatus('Error');
       }
     );
 
-    // Cleanup subscription on component unmount or satellite change
     return () => {
       console.log(`Unsubscribing from telemetry for ${selectedSatelliteId}`);
       unsubscribe();
     };
-  }, [selectedSatelliteId, isClient]); // Re-subscribe when satellite ID or client status changes
+  }, [selectedSatelliteId, isClient]);
 
 
-  // Function to calculate risk score using latest display values
   const calculateRiskScore = useCallback(async () => {
-     if (!isClient) return; // Don't run on server
+     if (!isClient) return;
 
-     // Ensure comm status is valid before sending
      const validCommStatuses = ["stable", "unstable", "lost"];
      const currentCommStatus = displayCommStatus;
 
@@ -599,50 +552,40 @@ export default function HomeContainer() {
 
      setRiskScoreLoading(true);
      setRiskScoreError(null);
-     setRiskScoreData(null); // Clear previous score
+     setRiskScoreData(null);
 
     try {
-        // Use the current display values as input
        const inputData = {
            batteryLevel: displayBatteryLevel,
            temperature: displayTemperature,
-           // Ensure communicationStatus is one of the allowed enum values
            communicationStatus: validCommStatuses.includes(currentCommStatus as string)
                                 ? currentCommStatus as "stable" | "unstable" | "lost"
-                                : "unstable", // Default to unstable if status is unexpected like "N/A" or "Loading"
+                                : "unstable",
        };
         console.log("Calculating risk score with input:", inputData);
-        // Call the API route instead of the flow directly
          const response = await fetch('/api/getRiskScore', {
            method: 'POST',
            headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify(inputData),
          });
 
-          // Capture response text early for debugging
           const responseText = await response.text();
 
-         // Check if response is ok
          if (!response.ok) {
             console.error(`/api/getRiskScore request failed with status ${response.status}. Response text:`, responseText);
-             // Attempt to read the error message from the captured text
              let errorData;
              try {
-                 errorData = JSON.parse(responseText); // Try parsing captured text
+                 errorData = JSON.parse(responseText);
              } catch (e) {
-                  // If JSON parsing fails, use the raw text
                   errorData = responseText;
-                 // Check if it looks like an HTML error page
                  if (typeof errorData === 'string' && errorData.trim().toLowerCase().startsWith('<!doctype html')) {
-                     console.error("Server returned HTML instead of JSON:", errorData.substring(0, 500) + "..."); // Log a snippet
+                     console.error("Server returned HTML instead of JSON:", errorData.substring(0, 500) + "...");
                       throw new Error(`Server Error (Status: ${response.status}). Please check server logs.`);
                  }
              }
-             // Throw based on parsed JSON or text response
              throw new Error(errorData?.error || errorData || `HTTP error! status: ${response.status}`);
          }
 
-        // Parse the captured text if response.ok
         const riskScore = JSON.parse(responseText);
         console.log("Received risk score:", riskScore);
         setRiskScoreData(riskScore);
@@ -650,11 +593,10 @@ export default function HomeContainer() {
         console.error('Risk Score Calculation Error:', error);
         let message = "An unexpected error occurred.";
          if (error instanceof Error) {
-             message = error.message; // Use the message from the caught error
+             message = error.message;
          } else if (typeof error === 'string') {
              message = error;
          }
-         // Add specific error handling for API key issues
          if (message.includes("API key not valid") || message.includes("Invalid API Key")) {
             setRiskScoreError("AI Error: Invalid API Key. Please check configuration.");
           } else if (message.includes("Server Error (Status: 500)") || message.includes("Server returned an HTML error page")) {
@@ -665,16 +607,14 @@ export default function HomeContainer() {
     } finally {
        setRiskScoreLoading(false);
     }
-  }, [displayBatteryLevel, displayTemperature, displayCommStatus, isClient]); // Depend on display values and client status
+  }, [displayBatteryLevel, displayTemperature, displayCommStatus, isClient]);
 
-  // Render HomeContent only on the client to avoid hydration issues with client-side state
   if (!isClient) {
-      // Optionally render a loading skeleton or null during SSR
       return (
           <div className="flex min-h-screen">
                <div className="flex-1 p-4">
                   <Skeleton className="h-8 w-1/2 mb-4" />
-                  <Separator className="my-4"/>
+                  <UiSeparator className="my-4"/>
                    <div className="grid gap-6">
                       <Skeleton className="h-40 w-full" />
                       <Skeleton className="h-40 w-full" />
@@ -686,8 +626,6 @@ export default function HomeContainer() {
 
   return (
     <div className="flex min-h-screen">
-      {/* AppSidebar is rendered via layout.tsx */}
-      {/* Main Content Area */}
         <HomeContent
           batteryLevel={displayBatteryLevel}
           temperature={displayTemperature}
@@ -702,3 +640,4 @@ export default function HomeContainer() {
     </div>
   );
 }
+
