@@ -5,7 +5,7 @@
  *
  * - getRiskScore - A function that calculates the risk score.
  */
-import {ai} from '@/ai/ai-instance'; // Correctly imports ai instance from the non-'use server' file
+import {ai}from '@/ai/ai-instance'; // Correctly imports ai instance from the non-'use server' file
 import {z} from 'genkit';
 import type {GetRiskScoreInput, GetRiskScoreOutput} from '@/ai/types'; // Import types
 
@@ -49,7 +49,7 @@ export async function getRiskScore(
 
 const prompt = ai.definePrompt({
   name: 'getRiskScorePrompt',
-  model: 'googleai/gemini-1.5-flash-latest', // Specify the model to use
+  model: 'gemini-1.5-flash-latest', // Specify the model to use
   input: {
     schema: GetRiskScoreInputSchema, // Use the local schema definition
   },
@@ -127,4 +127,5 @@ const getRiskScoreFlow = ai.defineFlow<
 
 // Make sure only the wrapper function and types are intended for export if using modules
 // (The 'export' keyword handles this)
+
 
