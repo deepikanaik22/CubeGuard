@@ -16,10 +16,10 @@ const nextConfig = {
       },
     ],
   },
-  experimental: {
+  //experimental: {
     // More comprehensive list for OpenTelemetry and related dependencies
     // to be treated as external on the server, reducing bundling conflicts.
-    serverComponentsExternalPackages: [
+    serverExternalPackages: [
         '@opentelemetry/api',
         '@opentelemetry/core',
         '@opentelemetry/exporter-trace-otlp-http',
@@ -33,7 +33,7 @@ const nextConfig = {
         'protobufjs', // Often a dependency that can cause issues if bundled incorrectly
         // Add any other packages that might be causing resolution issues for Node.js built-ins
     ],
-  },
+ // },
   webpack: (config, { isServer, webpack }) => {
     config.experiments = { ...config.experiments, topLevelAwait: true };
 
@@ -77,6 +77,15 @@ const nextConfig = {
         'zlib': false,
       };
     }
+
+     // Suppress require.extensions warnings from handlebars
+    config.ignoreWarnings = [
+      {
+        module: /handlebars/,
+        message: /require\.extensions is not supported by webpack/,
+      },
+    ];
+
     return config;
   },
 };
