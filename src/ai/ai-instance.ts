@@ -1,42 +1,80 @@
+
 import { genkit } from 'genkit';
 
-// If you're not using Google anymore, you can remove this line:
-// import { googleAI } from '@genkit-ai/googleai';
-
+// Module-scoped API key, loaded once.
 const openRouterApiKey = process.env.OPENROUTER_API_KEY;
 
 if (!openRouterApiKey || openRouterApiKey.trim() === '') {
+  // This warning is good for server startup, but the call method will also check.
   console.warn('AI Initialization Warning: OPENROUTER_API_KEY not set. OpenRouter features may not work.');
 }
 
 export const ai = genkit({
-  plugins: [], // No plugins since you're not using Google anymore
+  plugins: [],
   logLevel: 'debug',
   enableTracing: true,
 });
 
-// 👇 Add OpenRouter manual fetch logic here
 export const openRouterAI = {
   call: async (prompt: string): Promise<string> => {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openRouterApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'openai/gpt-3.5-turbo', // or another supported model
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
+    // Check API key on each call for robustness, as env might change or be late-loaded in some contexts
+    if (!openRouterApiKey || openRouterApiKey.trim() === '') {
+      console.error('🔴 OpenRouter Configuration Error: OPENROUTER_API_KEY is not set or empty at call time.');
+      const configError = new Error('OpenRouter Configuration Error: API key is missing or invalid. Please check server configuration.');
+      configError.name = 'ConfigurationError';
+      throw configError;
+    }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('🔴 OpenRouter API error:', errorText);
-      throw new Error(`OpenRouter error (${response.status}): ${errorText}`);
-    }    
+    console.log('Attempting to call OpenRouter with prompt snippet:', prompt.substring(0, 100) + "...");
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openRouterApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-3.5-turbo',
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
 
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content ?? '';
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔴 OpenRouter API HTTP error:', response.status, errorText);
+        let detail = errorText;
+        try {
+            const errJson = JSON.parse(errorText);
+            if (errJson.error && errJson.error.message) {
+                detail = errJson.error.message;
+            }
+        } catch (e) { /* ignore if errorText is not JSON */ }
+        const apiError = new Error(`OpenRouter API Error (${response.status}): ${detail}`);
+        apiError.name = 'OpenRouterAPIError';
+        throw apiError;
+      }
+
+      const data = await response.json();
+      // console.log('Received data from OpenRouter:', data); // Verbose, uncomment if needed
+
+      if (!data.choices || data.choices.length === 0 || !data.choices[0].message || typeof data.choices[0].message.content !== 'string') {
+          console.error('🔴 OpenRouter Response Error: Invalid or empty response structure.', data);
+          const responseError = new Error('OpenRouter Response Error: Received invalid or empty response structure from AI service.');
+          responseError.name = 'OpenRouterResponseError';
+          throw responseError;
+      }
+      return data.choices[0].message.content; // No '?? ""' as we validated content exists and is string
+
+    } catch (error: any) {
+        // Catch fetch errors (e.g., network issues) or errors thrown above
+        console.error(`🔴 OpenRouter AI Call Failed - Name: ${error.name}, Message: ${error.message}`);
+        if (error.name === 'ConfigurationError' || error.name === 'OpenRouterAPIError' || error.name === 'OpenRouterResponseError') {
+            throw error; // Re-throw our custom-named errors
+        }
+        // For other errors (e.g. network failure before fetch, or unexpected)
+        const networkError = new Error(`OpenRouter Network Error: Communication failed. ${error.message || 'Unknown network issue'}`);
+        networkError.name = 'NetworkError';
+        throw networkError;
+    }
   },
 };
