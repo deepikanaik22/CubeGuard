@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { getTelemetryData } from '@/services/telemetry';
 import { openRouterAI } from '@/ai/ai-instance';
-import { anomalySchemas } from '@/shared/anomalySchemas'; // Corrected import name
+import { anomalySchemas } from '@/shared/anomalySchemas'; // Correctly import anomalySchemas
 
 // Destructure with the correct names from anomalySchemas
 const { ExplainAnomalyScoreInput, ExplainAnomalyScoreOutput } = anomalySchemas;
