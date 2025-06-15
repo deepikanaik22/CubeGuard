@@ -49,7 +49,7 @@ export async function getRiskScore(
 
 const prompt = ai.definePrompt({
   name: 'getRiskScorePrompt',
-  model: 'models/gemini-1.5-flash-latest', // Specify the model to use
+  model: 'gemini-1.0-pro', // Changed model
   input: {
     schema: GetRiskScoreInputSchema, // Use the local schema definition
   },

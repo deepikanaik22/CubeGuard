@@ -118,7 +118,11 @@ export async function explainAnomalyScore(
     console.error('[explainAnomalyScore Flow] Critical error during execution:', error);
      if (error instanceof Error) {
          console.error('[explainAnomalyScore Flow] Error Stack Trace:', error.stack);
-         throw error; // Re-throw to be caught by the API route handler
+         if (error.message.includes("timeout") || error.message.includes("deadline exceeded")){
+            console.error("[explainAnomalyScore Flow] Timeout detected in flow execution.");
+             throw new Error(`AI operation timed out for satellite ${ (input as any)?.satelliteId || 'unknown'}. The AI model took too long to respond. Please try again later or check model availability/quota.`);
+         }
+         throw error;
      } else {
          console.error('[explainAnomalyScore Flow] Unknown error object thrown:', error);
          throw new Error('[explainAnomalyScore Flow] Failed due to an unknown error.');
@@ -131,7 +135,7 @@ const prompt = ai.definePrompt<
   typeof ExplainAnomalyScoreOutputSchema
 >({
   name: 'explainAnomalyScorePrompt',
-  model: 'models/gemini-1.5-flash-latest', // Explicitly set a faster model
+  model: 'gemini-1.0-pro', // Changed model
   input: {
     schema: z.object({
       satelliteId: z.string(),
@@ -253,9 +257,10 @@ const explainAnomalyScoreFlow = ai.defineFlow<
             if (error.message.includes("API key not valid")) {
                  throw new Error("AI Error: Invalid API Key. Please check configuration.");
             }
-            // Check for timeout specific messages if the SDK provides them, otherwise rely on general message
-            if (error.message.toLowerCase().includes('timeout') || error.message.toLowerCase().includes('deadline exceeded')) {
-                throw new Error(`AI prompt execution timed out for ${input.satelliteId}: ${error.message}`);
+            // Check for timeout specific messages
+             if (error.message.toLowerCase().includes('timeout') || error.message.toLowerCase().includes('deadline exceeded')) {
+                 console.error(`[explainAnomalyScoreFlow] Timeout during AI prompt for ${input.satelliteId}`);
+                 throw new Error(`AI prompt execution timed out for ${input.satelliteId}: ${error.message}. This could be due to network issues or the model taking too long. Check model availability and quotas.`);
             }
             throw new Error(`AI prompt execution failed for ${input.satelliteId}: ${error.message}`);
         } else {
