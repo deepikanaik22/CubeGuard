@@ -25,7 +25,11 @@ export const openRouterAI = {
       throw configError;
     }
 
-    console.log('Attempting to call OpenRouter with prompt snippet:', prompt.substring(0, 100) + "...");
+    // Log the API key being used (masked) for debugging
+    const maskedApiKey = openRouterApiKey ? `${openRouterApiKey.substring(0, 8)}...${openRouterApiKey.substring(openRouterApiKey.length - 4)}` : 'NOT SET';
+    console.log(`Attempting to call OpenRouter with API Key (masked): ${maskedApiKey}`);
+    console.log('Prompt snippet:', prompt.substring(0, 100) + "...");
+
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -49,13 +53,17 @@ export const openRouterAI = {
                 detail = errJson.error.message;
             }
         } catch (e) { /* ignore if errorText is not JSON */ }
-        const apiError = new Error(`OpenRouter API Error (${response.status}): ${detail}`);
+        // Prepend status to the message for clarity if it's not already there
+        const messagePrefix = `(${response.status}) `;
+        const fullDetail = detail.startsWith(messagePrefix.trim()) ? detail : messagePrefix + detail;
+
+        const apiError = new Error(`OpenRouter API Error: ${fullDetail}`);
         apiError.name = 'OpenRouterAPIError';
+        (apiError as any).statusCode = response.status; // Store status code
         throw apiError;
       }
 
       const data = await response.json();
-      // console.log('Received data from OpenRouter:', data); // Verbose, uncomment if needed
 
       if (!data.choices || data.choices.length === 0 || !data.choices[0].message || typeof data.choices[0].message.content !== 'string') {
           console.error('🔴 OpenRouter Response Error: Invalid or empty response structure.', data);
@@ -63,18 +71,17 @@ export const openRouterAI = {
           responseError.name = 'OpenRouterResponseError';
           throw responseError;
       }
-      return data.choices[0].message.content; // No '?? ""' as we validated content exists and is string
+      return data.choices[0].message.content;
 
     } catch (error: any) {
-        // Catch fetch errors (e.g., network issues) or errors thrown above
         console.error(`🔴 OpenRouter AI Call Failed - Name: ${error.name}, Message: ${error.message}`);
         if (error.name === 'ConfigurationError' || error.name === 'OpenRouterAPIError' || error.name === 'OpenRouterResponseError') {
-            throw error; // Re-throw our custom-named errors
+            throw error;
         }
-        // For other errors (e.g. network failure before fetch, or unexpected)
         const networkError = new Error(`OpenRouter Network Error: Communication failed. ${error.message || 'Unknown network issue'}`);
         networkError.name = 'NetworkError';
         throw networkError;
     }
   },
 };
+
