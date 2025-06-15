@@ -7,12 +7,13 @@ const openRouterApiKey = process.env.OPENROUTER_API_KEY;
 if (!openRouterApiKey || openRouterApiKey.trim() === '') {
   // This warning is good for server startup, but the call method will also check.
   console.warn('AI Initialization Warning: OPENROUTER_API_KEY not set. OpenRouter features may not work.');
+  
 }
 
 export const ai = genkit({
   plugins: [],
-  logLevel: 'debug',
-  enableTracing: true,
+//  logLevel: 'debug',
+//  enableTracing: true,
 });
 
 export const openRouterAI = {
