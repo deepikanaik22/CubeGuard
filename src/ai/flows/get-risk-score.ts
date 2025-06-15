@@ -5,7 +5,7 @@
  *
  * - getRiskScore - A function that calculates the risk score.
  */
-import {ai}from '@/ai/ai-instance'; // Correctly imports ai instance
+import {ai, openRouterAI }from '@/ai/ai-instance'; // Correctly imports ai instance and openRouterAI
 import {z} from 'genkit';
 import type {GetRiskScoreInput, GetRiskScoreOutput} from '@/ai/types'; // Import types
 
@@ -19,8 +19,8 @@ const GetRiskScoreInputSchema = z.object({
 });
 
 const GetRiskScoreOutputSchema = z.object({
-  riskScore: z.number().describe('The calculated risk score (0-100).'),
-  explanation: z.string().describe('Explanation of the risk score calculation.'),
+  riskScore: z.number().min(0).max(100).describe('The calculated risk score (0-100).'),
+  explanation: z.string().describe('Explanation of the risk score calculation (1-2 sentences).'),
 });
 
 // Exported wrapper function remains async
@@ -50,24 +50,18 @@ const getRiskScoreFlow = ai.defineFlow<
   typeof GetRiskScoreOutputSchema
 >(
   {
-    name: 'getRiskScoreFlow',
+    name: 'getRiskScoreFlow', // Still a Genkit flow for tracing, but uses openRouterAI.call
     inputSchema: GetRiskScoreInputSchema,
     outputSchema: GetRiskScoreOutputSchema,
   },
   async (input) => {
-    console.log('Executing getRiskScoreFlow with input (OpenRouter):', input);
-    const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+    console.log('Executing getRiskScoreFlow with input (using openRouterAI.call):', input);
 
-    if (!openRouterApiKey) {
-        console.error("OPENROUTER_API_KEY is not set in environment variables.");
-        throw new Error("OpenRouter AI Error: OPENROUTER_API_KEY is not configured.");
-    }
-
-    try {
-      const promptString = `You are an expert in assessing risk based on telemetry data for CubeSats.
+    // Construct the prompt for OpenRouter
+    const promptString = `You are an expert in assessing risk based on telemetry data for CubeSats.
 
 Given the following telemetry data, calculate a risk score between 0 and 100,
-where 0 indicates no risk and 100 indicates maximum risk. Also, provide a brief explanation of how you arrived at the risk score.
+where 0 indicates no risk and 100 indicates maximum risk. Also, provide a brief explanation (1-2 sentences) of how you arrived at the risk score.
 
 Telemetry Data:
 - Battery Level: ${input.batteryLevel}%
@@ -82,45 +76,21 @@ Consider the following factors carefully:
 Output the risk score and a concise explanation based ONLY on the provided data and risk factors.
 Ensure the output strictly adheres to the JSON format: {"riskScore": number, "explanation": "string in one or two sentences"}.`;
 
-      console.log("Sending prompt to OpenRouter:", promptString);
-
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openRouterApiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "openai/gpt-3.5-turbo", // As specified
-          messages: [
-            { role: "user", content: promptString }
-          ]
-        })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`OpenRouter API error: ${response.status}`, errorText);
-        throw new Error(`OpenRouter API request failed with status ${response.status}: ${errorText}`);
-      }
-
-      const responseData = await response.json();
-      console.log("OpenRouter raw response data:", responseData);
-
-      const aiResponseContent = responseData.choices?.[0]?.message?.content;
+    try {
+      const aiResponseContent = await openRouterAI.call(promptString);
 
       if (!aiResponseContent) {
-        console.error('OpenRouter response missing content:', responseData);
+        console.error('OpenRouter response missing content via openRouterAI.call.');
         throw new Error('AI response from OpenRouter was missing or empty.');
       }
-      console.log("OpenRouter AI response content:", aiResponseContent);
 
       let parsedOutput;
       try {
         parsedOutput = JSON.parse(aiResponseContent);
       } catch (parseError: any) {
         console.error('Failed to parse AI response from OpenRouter as JSON:', aiResponseContent, parseError);
-        throw new Error(`AI response from OpenRouter was not valid JSON: '${aiResponseContent}'. Error: ${parseError.message}`);
+        // Provide more context in the error message
+        throw new Error(`AI response from OpenRouter was not valid JSON. Content: '${aiResponseContent}'. Error: ${parseError.message}`);
       }
 
       const validation = GetRiskScoreOutputSchema.safeParse(parsedOutput);
@@ -136,12 +106,14 @@ Ensure the output strictly adheres to the JSON format: {"riskScore": number, "ex
     } catch (error) {
       console.error('Error within getRiskScoreFlow (OpenRouter) execution:', error);
        if (error instanceof Error) {
-           if (error.message.includes("OPENROUTER_API_KEY") || error.message.toLowerCase().includes("api key")) {
-                throw error; // Rethrow specific API key error
+           // Rethrow specific API key error if caught by openRouterAI.call
+           if (error.message.includes("OPENROUTER_API_KEY")) {
+                throw error;
            }
-           throw new Error(`OpenRouter AI request failed: ${error.message}`);
+           throw new Error(`OpenRouter AI processing failed: ${error.message}`);
        } else {
            throw new Error('An unknown error occurred during OpenRouter AI processing.');
        }
     }
   }
+);
