@@ -4,10 +4,10 @@
 import { z } from 'zod';
 import { getTelemetryData } from '@/services/telemetry';
 import { openRouterAI } from '@/ai/ai-instance';
-import { anomalySchemas } from '@/shared/anomalySchemas';
+// Correctly import the specific Zod schemas directly
+import { ExplainAnomalyScoreInput, ExplainAnomalyScoreOutput } from '@/shared/anomalySchemas';
 
-const { ExplainAnomalyScoreInput, ExplainAnomalyScoreOutput } = anomalySchemas;
-
+// Types are inferred directly from the imported Zod schemas
 type ExplainAnomalyScoreInputType = z.infer<typeof ExplainAnomalyScoreInput>;
 type ExplainAnomalyScoreOutputType = z.infer<typeof ExplainAnomalyScoreOutput>;
 
@@ -35,22 +35,22 @@ function extractJson(response: string): string {
       }
       balance++;
     } else if (response[i] === '}') {
-      if (balance > 0) { 
+      if (balance > 0) {
           balance--;
           if (balance === 0 && firstBrace !== -1) {
             potentialJson = response.substring(firstBrace, i + 1);
             try {
               JSON.parse(potentialJson); // Validate
-              return potentialJson; 
+              return potentialJson;
             } catch (e) {
               // console.warn("Found a {}-balanced block that wasn't valid JSON, continuing search.", e, "Block:", potentialJson.substring(0,100));
-              firstBrace = -1; 
+              firstBrace = -1; // Reset firstBrace to allow finding subsequent JSON objects if the current one is invalid
             }
           }
       }
     }
   }
-  
+
   // console.warn("No valid JSON extracted, returning empty object for Zod validation.");
   return '{}';
 }
@@ -64,7 +64,7 @@ export async function explainAnomalyScore(
   if (!telemetryData) {
     console.error(`No telemetry data found for satellite ID: ${satelliteId} in explainAnomalyScore`);
     const notFoundError = new Error(`No telemetry data found for satellite ID: ${satelliteId}`);
-    notFoundError.name = 'NotFoundError'; 
+    notFoundError.name = 'NotFoundError';
     throw notFoundError;
   }
 
@@ -116,6 +116,7 @@ If telemetry data seems insufficient or ambiguous for a confident analysis, retu
 
     const json = JSON.parse(cleanedJsonString);
 
+    // Use the directly imported Zod schema for parsing
     const parsed = ExplainAnomalyScoreOutput.safeParse(json);
     if (!parsed.success) {
       const issues = parsed.error.errors.map((e: z.ZodIssue) =>
@@ -134,7 +135,7 @@ If telemetry data seems insufficient or ambiguous for a confident analysis, retu
     if (responseText && !(err instanceof SyntaxError) && err.name !== 'ZodValidationError') {
         console.error(`   Raw responseText that might have led to error for ${satelliteId}: ${responseText.substring(0, 500)}...`);
     }
+    // Re-throw the error, potentially with its custom name intact
     throw err;
   }
 }
-
