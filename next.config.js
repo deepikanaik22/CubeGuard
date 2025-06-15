@@ -16,7 +16,7 @@ const nextConfig = {
       },
     ],
   },
-  //experimental: {
+  experimental: {
     // More comprehensive list for OpenTelemetry and related dependencies
     // to be treated as external on the server, reducing bundling conflicts.
     serverExternalPackages: [
@@ -33,7 +33,7 @@ const nextConfig = {
         'protobufjs', // Often a dependency that can cause issues if bundled incorrectly
         // Add any other packages that might be causing resolution issues for Node.js built-ins
     ],
- // },
+  },
   webpack: (config, { isServer, webpack }) => {
     config.experiments = { ...config.experiments, topLevelAwait: true };
 
