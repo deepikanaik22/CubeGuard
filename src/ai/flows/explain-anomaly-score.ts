@@ -131,7 +131,7 @@ const prompt = ai.definePrompt<
   typeof ExplainAnomalyScoreOutputSchema
 >({
   name: 'explainAnomalyScorePrompt',
-  model: 'gemini-1.5-flash-latest', // Explicitly set a faster model
+  model: 'models/gemini-1.5-flash-latest', // Explicitly set a faster model
   input: {
     schema: z.object({
       satelliteId: z.string(),
@@ -265,3 +265,4 @@ const explainAnomalyScoreFlow = ai.defineFlow<
     }
   }
 );
+
