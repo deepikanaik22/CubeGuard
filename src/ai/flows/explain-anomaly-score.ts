@@ -4,21 +4,55 @@
 import { z } from 'zod';
 import { getTelemetryData } from '@/services/telemetry';
 import { openRouterAI } from '@/ai/ai-instance';
-import {
-  ExplainAnomalyScoreInput,
-  ExplainAnomalyScoreOutput,
-} from '@/shared/anomalySchemas';
+import { anomalySchemas } from '@/shared/anomalySchemas';
 
-// Type alias for Zod schemas if needed for clarity, or use directly
+const { ExplainAnomalyScoreInput, ExplainAnomalyScoreOutput } = anomalySchemas;
+
 type ExplainAnomalyScoreInputType = z.infer<typeof ExplainAnomalyScoreInput>;
 type ExplainAnomalyScoreOutputType = z.infer<typeof ExplainAnomalyScoreOutput>;
 
-// Utility to extract JSON object from messy AI response
 function extractJson(response: string): string {
-  const match = response.match(/\{[\s\S]*?\}/);
-  // If no match, return an empty object string to avoid JSON.parse error on non-JSON,
-  // then let Zod validation catch it as invalid.
-  return match ? match[0] : '{}';
+  // Attempt to find JSON within ```json ... ```
+  const markdownMatch = response.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+  if (markdownMatch && markdownMatch[1]) {
+    try {
+      JSON.parse(markdownMatch[1]); // Validate
+      return markdownMatch[1];
+    } catch (e) {
+      // console.warn("Failed to parse content within markdown JSON block, trying other methods.", e);
+    }
+  }
+
+  // Attempt to find the first complete JSON object in the string
+  let firstBrace = -1;
+  let balance = 0;
+  let potentialJson = "";
+
+  for (let i = 0; i < response.length; i++) {
+    if (response[i] === '{') {
+      if (balance === 0) {
+        firstBrace = i;
+      }
+      balance++;
+    } else if (response[i] === '}') {
+      if (balance > 0) { 
+          balance--;
+          if (balance === 0 && firstBrace !== -1) {
+            potentialJson = response.substring(firstBrace, i + 1);
+            try {
+              JSON.parse(potentialJson); // Validate
+              return potentialJson; 
+            } catch (e) {
+              // console.warn("Found a {}-balanced block that wasn't valid JSON, continuing search.", e, "Block:", potentialJson.substring(0,100));
+              firstBrace = -1; 
+            }
+          }
+      }
+    }
+  }
+  
+  // console.warn("No valid JSON extracted, returning empty object for Zod validation.");
+  return '{}';
 }
 
 export async function explainAnomalyScore(
@@ -29,9 +63,8 @@ export async function explainAnomalyScore(
   const telemetryData = await getTelemetryData(satelliteId);
   if (!telemetryData) {
     console.error(`No telemetry data found for satellite ID: ${satelliteId} in explainAnomalyScore`);
-    // Create an error object that the API route can identify
     const notFoundError = new Error(`No telemetry data found for satellite ID: ${satelliteId}`);
-    notFoundError.name = 'NotFoundError'; // Custom name for easier checking
+    notFoundError.name = 'NotFoundError'; 
     throw notFoundError;
   }
 
@@ -70,9 +103,7 @@ If telemetry data seems insufficient or ambiguous for a confident analysis, retu
 
   let responseText = '';
   try {
-    // console.log(`Calling openRouterAI for satellite ${satelliteId} with prompt...`); // Verbose
     responseText = await openRouterAI.call(prompt);
-    // console.log(`Raw response from openRouterAI for ${satelliteId}:`, responseText); // Verbose
 
     if (!responseText || responseText.trim() === '') {
         console.error(`Empty response from openRouterAI for ${satelliteId}.`);
@@ -82,9 +113,8 @@ If telemetry data seems insufficient or ambiguous for a confident analysis, retu
     }
 
     const cleanedJsonString = extractJson(responseText);
-    // console.log(`Cleaned JSON string for ${satelliteId}:`, cleanedJsonString); // Verbose
 
-    const json = JSON.parse(cleanedJsonString); // Can throw SyntaxError
+    const json = JSON.parse(cleanedJsonString);
 
     const parsed = ExplainAnomalyScoreOutput.safeParse(json);
     if (!parsed.success) {
@@ -97,17 +127,14 @@ If telemetry data seems insufficient or ambiguous for a confident analysis, retu
       throw validationError;
     }
 
-    // console.log(`Successfully parsed and validated AI response for ${satelliteId}:`, parsed.data); // Verbose
     return parsed.data;
 
   } catch (err: any) {
     console.error(`❌ Error in explainAnomalyScore for ${satelliteId} - Name: ${err.name}, Message: ${err.message}`);
-    // Log context if available
     if (responseText && !(err instanceof SyntaxError) && err.name !== 'ZodValidationError') {
         console.error(`   Raw responseText that might have led to error for ${satelliteId}: ${responseText.substring(0, 500)}...`);
     }
-    // Re-throw the original error to be handled by the API route.
-    // This preserves error.name and other properties.
     throw err;
   }
 }
+
