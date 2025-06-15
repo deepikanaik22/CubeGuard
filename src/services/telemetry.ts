@@ -44,6 +44,13 @@ function generateSimulatedTelemetry(satelliteId: string): TelemetryData {
   };
 }
 
+// Initialize data store with initial values for all known satellites at module load time
+knownSatelliteIds.forEach(id => {
+    latestDataStore[id] = generateSimulatedTelemetry(id);
+});
+console.log("Telemetry data store initialized at module load.");
+
+
 /**
  * Notifies all listeners for a specific satellite with new data.
  * @param satelliteId The ID of the satellite.
@@ -78,20 +85,18 @@ function updateAllSatellites() {
 // Initialize simulation interval (only run on client-side)
 let simulationInterval: NodeJS.Timeout | null = null;
 if (typeof window !== 'undefined' && !simulationInterval) {
-    // Initialize data store with initial values
-    knownSatelliteIds.forEach(id => {
-        if (!latestDataStore[id]) { // Only initialize if not already present
-            latestDataStore[id] = generateSimulatedTelemetry(id);
-        }
-    });
-    // Start the simulation loop
+    // Data store is already initialized above.
+    // Start the simulation loop for client-side updates
     simulationInterval = setInterval(updateAllSatellites, 2000); // Update every 2 seconds
-    console.log("Telemetry simulation started.");
+    console.log("Client-side telemetry simulation interval started.");
 
-    // Initial notification for any early subscribers
+    // Initial notification for any early client-side subscribers
      setTimeout(() => {
         knownSatelliteIds.forEach(id => {
-            notifyListeners(id, latestDataStore[id]);
+            // Only notify if there are listeners, to avoid issues if this runs before components mount
+            if (listeners[id] && listeners[id].length > 0) {
+                notifyListeners(id, latestDataStore[id]);
+            }
         });
      }, 100);
 }
@@ -183,3 +188,4 @@ if (typeof window !== 'undefined') {
         });
     }
 }
+
