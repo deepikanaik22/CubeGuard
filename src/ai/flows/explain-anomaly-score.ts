@@ -135,7 +135,7 @@ const prompt = ai.definePrompt<
   typeof ExplainAnomalyScoreOutputSchema
 >({
   name: 'explainAnomalyScorePrompt',
-  model: 'googleai/gemini-1.0-pro', // Changed model
+  model: 'gemini-1.5-flash-latest', // Changed model to gemini-1.5-flash-latest
   input: {
     schema: z.object({
       satelliteId: z.string(),
