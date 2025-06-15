@@ -4,14 +4,14 @@
 import { z } from 'zod';
 import { getTelemetryData } from '@/services/telemetry';
 import { openRouterAI } from '@/ai/ai-instance';
-import { aiSchemas } from '@/shared/anomalySchemas'; // Correctly import aiSchemas
+import { anomalySchemas } from '@/shared/anomalySchemas'; // Corrected import name
 
-// Destructure with the correct names from aiSchemas
-const { ExplainAnomalyScoreInput, ExplainAnomalyScoreOutput } = aiSchemas;
+// Destructure with the correct names from anomalySchemas
+const { ExplainAnomalyScoreInput, ExplainAnomalyScoreOutput } = anomalySchemas;
 
 
 export async function explainAnomalyScore(
-  input: z.infer<typeof ExplainAnomalyScoreInput> // Use ExplainAnomalyScoreInput from aiSchemas
+  input: z.infer<typeof ExplainAnomalyScoreInput> // Use ExplainAnomalyScoreInput from anomalySchemas
 ) {
   const { satelliteId } = input;
 
@@ -48,7 +48,7 @@ Do not include any other text, just the JSON.
     // Attempt to parse the responseText, which should be a JSON string
     const parsedJson = JSON.parse(responseText);
     // Validate the parsed JSON against the Zod schema
-    const parsed = ExplainAnomalyScoreOutput.parse(parsedJson); // Use ExplainAnomalyScoreOutput from aiSchemas
+    const parsed = ExplainAnomalyScoreOutput.parse(parsedJson); // Use ExplainAnomalyScoreOutput from anomalySchemas
     return parsed;
   } catch (err) {
     console.error('❌ AI output invalid or not JSON:', responseText, err);
